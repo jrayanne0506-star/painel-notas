@@ -49,83 +49,108 @@ function detectarTipo(buffer: Buffer, contentType: string): "pdf" | "image" | "u
   return "unknown"
 }
 
-async function obterTokenVision(): Promise<string> {
-  const privateKey = (process.env.GOOGLE_PRIVATE_KEY ?? "").replace(/\\n/g, "\n")
-  const clientEmail = process.env.GOOGLE_CLIENT_EMAIL ?? ""
-  if (!privateKey || !clientEmail) throw new Error("Credenciais Google não configuradas")
+async function lerComClaude(buffer: Buffer, tipo: "pdf" | "image", valorEsperado: string): Promise<{
+  numeroNfse: string
+  statusValidacao: string
+  valorDetectado: string
+}> {
+  const apiKey = process.env.ANTHROPIC_API_KEY
+  if (!apiKey) throw new Error("ANTHROPIC_API_KEY não configurada")
 
-  const header = Buffer.from(JSON.stringify({ alg: "RS256", typ: "JWT" })).toString("base64url")
-  const now = Math.floor(Date.now() / 1000)
-  const payload = Buffer.from(JSON.stringify({
-    iss: clientEmail,
-    scope: "https://www.googleapis.com/auth/cloud-platform",
-    aud: "https://oauth2.googleapis.com/token",
-    exp: now + 3600,
-    iat: now,
-  })).toString("base64url")
+  const base64 = buffer.toString("base64")
+  const mediaType = tipo === "pdf" ? "application/pdf" : "image/jpeg"
 
-  const { createSign } = await import("crypto")
-  const sign = createSign("RSA-SHA256")
-  sign.update(`${header}.${payload}`)
-  const signature = sign.sign(privateKey, "base64url")
-  const jwt = `${header}.${payload}.${signature}`
+  const prompt = `Você está analisando um documento fiscal brasileiro (NFS-e ou nota fiscal).
 
-  const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: `grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Ajwt-bearer&assertion=${jwt}`,
-  })
-  const tokenData = await tokenRes.json() as any
-  if (!tokenData.access_token) throw new Error(`Token falhou: ${JSON.stringify(tokenData)}`)
-  return tokenData.access_token
+Extraia as seguintes informações:
+1. Número da NFS-e (campo "Número da NFS-e" ou similar)
+2. Valor Líquido da NFS-e (campo "Valor Líquido da NFS-e" ou "Valor Total")
+3. Se o CNPJ "61.895.820/0001-83" (Scorpions Delivery) aparece no documento como TOMADOR DO SERVIÇO
+
+Responda APENAS em JSON, sem nenhum texto adicional, neste formato exato:
+{
+  "numeroNfse": "número aqui ou null se não encontrado",
+  "valorLiquido": "valor aqui sem R$ (ex: 103,20) ou null se não encontrado",
+  "temCnpjScorpions": true ou false
 }
 
-async function ocr_imagem(base64Content: string, accessToken: string): Promise<string> {
-  const res = await fetch("https://vision.googleapis.com/v1/images:annotate", {
+Valor esperado para comparação: ${valorEsperado}`
+
+  const response = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
+    headers: {
+      "Content-Type": "application/json",
+      "x-api-key": apiKey,
+      "anthropic-version": "2023-06-01",
+    },
     body: JSON.stringify({
-      requests: [{ image: { content: base64Content }, features: [{ type: "DOCUMENT_TEXT_DETECTION" }] }],
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 300,
+      messages: [
+        {
+          role: "user",
+          content: [
+            {
+              type: tipo === "pdf" ? "document" : "image",
+              source: {
+                type: "base64",
+                media_type: mediaType,
+                data: base64,
+              },
+            },
+            {
+              type: "text",
+              text: prompt,
+            },
+          ],
+        },
+      ],
     }),
   })
-  const data = await res.json() as any
-  if (data.error) console.error("Vision API error (imagem):", JSON.stringify(data.error))
-  return data.responses?.[0]?.fullTextAnnotation?.text ?? ""
-}
 
-async function ocr_pdf(base64Content: string, accessToken: string): Promise<string> {
-  const res = await fetch("https://vision.googleapis.com/v1/files:annotate", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
-    body: JSON.stringify({
-      requests: [{
-        inputConfig: { content: base64Content, mimeType: "application/pdf" },
-        features: [{ type: "DOCUMENT_TEXT_DETECTION" }],
-        pages: [1, 2, 3],
-      }],
-    }),
-  })
-  const data = await res.json() as any
-  if (data.error) console.error("Vision API error (pdf):", JSON.stringify(data.error))
-  const responses = data.responses?.[0]?.responses ?? []
-  return responses.map((r: any) => r.fullTextAnnotation?.text ?? "").join("\n")
-}
+  const data = await response.json() as any
 
-async function extrairTextoViaVision(buffer: Buffer, tipo: "pdf" | "image"): Promise<string> {
-  const accessToken = await obterTokenVision()
-  const base64Content = buffer.toString("base64")
-
-  if (tipo === "pdf") {
-    const textoPdf = await ocr_pdf(base64Content, accessToken)
-    console.log(`OCR PDF chars: ${textoPdf.trim().length}`)
-    if (textoPdf.trim().length > 20) return textoPdf
-    console.log("PDF vazio via files:annotate, tentando como imagem...")
-    const textoImg = await ocr_imagem(base64Content, accessToken)
-    console.log(`OCR imagem fallback chars: ${textoImg.trim().length}`)
-    return textoImg
+  if (data.error) {
+    console.error("Claude API error:", JSON.stringify(data.error))
+    throw new Error(`Claude API: ${data.error.message}`)
   }
 
-  return await ocr_imagem(base64Content, accessToken)
+  const texto = data.content?.[0]?.text ?? ""
+  console.log(`Claude resposta: ${texto}`)
+
+  let parsed: any = {}
+  try {
+    const jsonMatch = texto.match(/\{[\s\S]*\}/)
+    if (jsonMatch) parsed = JSON.parse(jsonMatch[0])
+  } catch (e) {
+    console.error("Erro ao parsear resposta Claude:", texto)
+    throw new Error("Resposta inválida do Claude")
+  }
+
+  const { numeroNfse, valorLiquido, temCnpjScorpions } = parsed
+
+  if (!temCnpjScorpions) {
+    console.log("CNPJ Scorpions não encontrado pelo Claude")
+    return { numeroNfse: "—", statusValidacao: "NÃO É NOTA", valorDetectado: "—" }
+  }
+
+  const numFinal = numeroNfse ?? "não encontrado"
+  const valorFinal = valorLiquido ?? "não encontrado"
+
+  const normalizar = (v: string) => String(v).replace(/\./g, "").replace(",", ".").trim()
+  const statusValidacao =
+    valorFinal !== "não encontrado" && valorFinal !== null &&
+    normalizar(String(valorFinal)) === normalizar(valorEsperado)
+      ? "VALIDADO"
+      : "DIVERGENTE"
+
+  console.log(`NFS-e=${numFinal} valor=${valorFinal} esperado=${valorEsperado} status=${statusValidacao}`)
+
+  return {
+    numeroNfse: String(numFinal),
+    statusValidacao,
+    valorDetectado: String(valorFinal),
+  }
 }
 
 export async function lerNotaLocal(link: string, valorEsperado: string) {
@@ -136,97 +161,5 @@ export async function lerNotaLocal(link: string, valorEsperado: string) {
 
   if (tipo === "unknown") throw new Error("Formato não suportado: " + contentType)
 
-  const texto = await extrairTextoViaVision(buffer, tipo)
-
-  // Log do texto completo para debug (primeiros 500 chars)
-  console.log(`=== TEXTO EXTRAIDO (500 chars) ===`)
-  console.log(texto.slice(0, 500))
-  console.log(`=== FIM TEXTO ===`)
-
-  const textoNormalizado = texto.replace(/\s+/g, " ")
-
-  // Busca CNPJ com variantes mais abrangentes
-  const cnpjVariantes = [
-    "61.895.820/0001-83",
-    "61895820000183",
-    "61.895.820/0001 83",
-    "61895820/0001-83",
-    "61.895.820",
-    "61895820",
-    "61 895 820",
-    "61.895.820/0001–83", // hífen especial
-  ]
-  const temCnpj = cnpjVariantes.some(v => textoNormalizado.includes(v))
-
-  console.log(`temCNPJ=${temCnpj} | buscando em: "${textoNormalizado.slice(0, 300)}"`)
-
-  if (!temCnpj) {
-    // Tenta achar qualquer CNPJ no texto para debug
-    const cnpjsEncontrados = textoNormalizado.match(/\d{2}[\.\s]?\d{3}[\.\s]?\d{3}\/\d{4}[-\s]?\d{2}/g)
-    console.log(`CNPJs encontrados no texto: ${JSON.stringify(cnpjsEncontrados)}`)
-    return { numeroNfse: "—", statusValidacao: "NÃO É NOTA", valorDetectado: "—" }
-  }
-
-  const linhas = texto.split("\n").map(l => l.trim()).filter(l => l.length > 0)
-  const textoUnico = linhas.join(" ")
-
-  // Número NFS-e
-  let numeroNfse = "não encontrado"
-  const padroesNum = [
-    /N[úu]mero\s+(?:da\s+)?NFS-?e[:\s]+(\d+)/i,
-    /NFS-?e\s+n[°º\.]\s*(\d+)/i,
-    /Nota\s+Fiscal.*?n[°º\.]\s*(\d+)/i,
-    /N[úu]mero\s+da\s+NFS-e\s*\n?\s*(\d+)/i,
-  ]
-  for (const p of padroesNum) {
-    const m = textoUnico.match(p)
-    if (m) { numeroNfse = m[1]; break }
-  }
-  if (numeroNfse === "não encontrado") {
-    for (let i = 0; i < linhas.length; i++) {
-      if (/N[úu]mero\s+da\s+NFS-?e/i.test(linhas[i])) {
-        for (let j = i + 1; j < Math.min(i + 5, linhas.length); j++) {
-          const m = linhas[j].match(/^(\d+)$/)
-          if (m) { numeroNfse = m[1]; break }
-        }
-      }
-    }
-  }
-
-  // Valor detectado
-  let valorDetectado = "não encontrado"
-  const padroesVal = [
-    /Valor\s+L[íi]quido\s+da\s+NFS-?e\s*[:\s]\s*R?\$?\s*([\d.,]+)/i,
-    /Valor\s+L[íi]quido\s*[:\s]\s*R?\$?\s*([\d.,]+)/i,
-    /Valor\s+Total\s*[:\s]\s*R?\$?\s*([\d.,]+)/i,
-    /Valor\s+do\s+Servi[çc]o\s*[:\s]\s*R?\$?\s*([\d.,]+)/i,
-  ]
-  for (const p of padroesVal) {
-    const m = textoUnico.match(p)
-    if (m) { valorDetectado = m[1].trim(); break }
-  }
-  if (valorDetectado === "não encontrado") {
-    for (let i = 0; i < linhas.length; i++) {
-      if (/Valor\s+L[íi]quido/i.test(linhas[i])) {
-        for (let j = i + 1; j < Math.min(i + 5, linhas.length); j++) {
-          const m = linhas[j].match(/R?\$?\s*([\d.,]+)/)
-          if (m) { valorDetectado = m[1].trim(); break }
-        }
-      }
-    }
-  }
-  if (valorDetectado === "não encontrado") {
-    const todos = [...textoUnico.matchAll(/R\$\s*([\d.,]+)/gi)]
-    if (todos.length > 0) valorDetectado = todos[todos.length - 1][1].trim()
-  }
-
-  const normalizar = (v: string) => v.replace(/\./g, "").replace(",", ".").trim()
-  const statusValidacao =
-    valorDetectado !== "não encontrado" &&
-    normalizar(valorDetectado) === normalizar(valorEsperado)
-      ? "VALIDADO"
-      : "DIVERGENTE"
-
-  console.log(`NFS-e=${numeroNfse} valor=${valorDetectado} esperado=${valorEsperado} status=${statusValidacao}`)
-  return { numeroNfse, statusValidacao, valorDetectado }
+  return await lerComClaude(buffer, tipo, valorEsperado)
 }
