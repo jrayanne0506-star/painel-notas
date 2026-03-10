@@ -26,7 +26,6 @@ async function baixarArquivo(link: string): Promise<{ buffer: Buffer; contentTyp
     buffer = Buffer.from(await res2.arrayBuffer())
     contentType = res2.headers.get("content-type") ?? ""
 
-    // Tenta URL alternativa se ainda for HTML
     const primeiros2 = buffer.slice(0, 100).toString("utf-8")
     if (contentType.includes("text/html") || primeiros2.includes("<!DOC")) {
       const urlAlt = `https://drive.usercontent.google.com/download?id=${fileId}&export=download&confirm=t`
@@ -90,6 +89,7 @@ async function ocr_imagem(base64Content: string, accessToken: string): Promise<s
     }),
   })
   const data = await res.json() as any
+  if (data.error) console.error("Vision API error (imagem):", JSON.stringify(data.error))
   return data.responses?.[0]?.fullTextAnnotation?.text ?? ""
 }
 
@@ -106,6 +106,7 @@ async function ocr_pdf(base64Content: string, accessToken: string): Promise<stri
     }),
   })
   const data = await res.json() as any
+  if (data.error) console.error("Vision API error (pdf):", JSON.stringify(data.error))
   const responses = data.responses?.[0]?.responses ?? []
   return responses.map((r: any) => r.fullTextAnnotation?.text ?? "").join("\n")
 }
@@ -116,10 +117,12 @@ async function extrairTextoViaVision(buffer: Buffer, tipo: "pdf" | "image"): Pro
 
   if (tipo === "pdf") {
     const textoPdf = await ocr_pdf(base64Content, accessToken)
+    console.log(`OCR PDF chars: ${textoPdf.trim().length}`)
     if (textoPdf.trim().length > 20) return textoPdf
-    // PDF escaneado — fallback para modo imagem
     console.log("PDF vazio via files:annotate, tentando como imagem...")
-    return await ocr_imagem(base64Content, accessToken)
+    const textoImg = await ocr_imagem(base64Content, accessToken)
+    console.log(`OCR imagem fallback chars: ${textoImg.trim().length}`)
+    return textoImg
   }
 
   return await ocr_imagem(base64Content, accessToken)
@@ -134,18 +137,33 @@ export async function lerNotaLocal(link: string, valorEsperado: string) {
   if (tipo === "unknown") throw new Error("Formato não suportado: " + contentType)
 
   const texto = await extrairTextoViaVision(buffer, tipo)
-  console.log(`Texto extraído (200 chars): ${texto.slice(0, 200)}`)
+
+  // Log do texto completo para debug (primeiros 500 chars)
+  console.log(`=== TEXTO EXTRAIDO (500 chars) ===`)
+  console.log(texto.slice(0, 500))
+  console.log(`=== FIM TEXTO ===`)
 
   const textoNormalizado = texto.replace(/\s+/g, " ")
+
+  // Busca CNPJ com variantes mais abrangentes
   const cnpjVariantes = [
-    "61.895.820/0001-83", "61895820000183",
-    "61.895.820/0001 83", "61895820/0001-83",
-    "61.895.820", "61895820",
+    "61.895.820/0001-83",
+    "61895820000183",
+    "61.895.820/0001 83",
+    "61895820/0001-83",
+    "61.895.820",
+    "61895820",
+    "61 895 820",
+    "61.895.820/0001–83", // hífen especial
   ]
   const temCnpj = cnpjVariantes.some(v => textoNormalizado.includes(v))
 
+  console.log(`temCNPJ=${temCnpj} | buscando em: "${textoNormalizado.slice(0, 300)}"`)
+
   if (!temCnpj) {
-    console.log("CNPJ Scorpions não encontrado")
+    // Tenta achar qualquer CNPJ no texto para debug
+    const cnpjsEncontrados = textoNormalizado.match(/\d{2}[\.\s]?\d{3}[\.\s]?\d{3}\/\d{4}[-\s]?\d{2}/g)
+    console.log(`CNPJs encontrados no texto: ${JSON.stringify(cnpjsEncontrados)}`)
     return { numeroNfse: "—", statusValidacao: "NÃO É NOTA", valorDetectado: "—" }
   }
 
@@ -158,6 +176,7 @@ export async function lerNotaLocal(link: string, valorEsperado: string) {
     /N[úu]mero\s+(?:da\s+)?NFS-?e[:\s]+(\d+)/i,
     /NFS-?e\s+n[°º\.]\s*(\d+)/i,
     /Nota\s+Fiscal.*?n[°º\.]\s*(\d+)/i,
+    /N[úu]mero\s+da\s+NFS-e\s*\n?\s*(\d+)/i,
   ]
   for (const p of padroesNum) {
     const m = textoUnico.match(p)
@@ -208,6 +227,6 @@ export async function lerNotaLocal(link: string, valorEsperado: string) {
       ? "VALIDADO"
       : "DIVERGENTE"
 
-  console.log(`NFS-e=${numeroNfse} valor=${valorDetectado} status=${statusValidacao}`)
+  console.log(`NFS-e=${numeroNfse} valor=${valorDetectado} esperado=${valorEsperado} status=${statusValidacao}`)
   return { numeroNfse, statusValidacao, valorDetectado }
 }
