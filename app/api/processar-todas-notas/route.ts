@@ -17,23 +17,20 @@ export async function POST(req: NextRequest) {
 
       try {
         const resultado = await lerNotaLocal(nota.link, nota.valorEsperado)
+        console.log(`Nota ${nota.nome}: NFS-e=${resultado.numeroNfse} status=${resultado.statusValidacao}`)
 
-        if (resultado.numeroNfse && resultado.numeroNfse !== "não encontrado" && resultado.numeroNfse !== "—") {
-          // Usa nome para buscar a linha correta na planilha de Respostas
-          // (mais confiável que id, que pode ser da planilha errada)
-          const chave = nota.nome ?? nota.id
-          await salvarResultadoNoSheets(chave, resultado.numeroNfse, resultado.statusValidacao)
-        }
+        // Salva SEMPRE que processar — mesmo DIVERGENTE ou NÃO É NOTA
+        const chave = nota.nome ?? nota.id
+        await salvarResultadoNoSheets(chave, resultado.numeroNfse, resultado.statusValidacao)
 
         resultados.push({ id: nota.id, nome: nota.nome, ...resultado })
       } catch (erroNota: any) {
-        console.error(`Erro nota ${nota.id} (${nota.nome}):`, erroNota.message)
+        console.error(`Erro nota ${nota.nome}:`, erroNota.message)
         resultados.push({ id: nota.id, erro: erroNota.message })
       }
     }
 
     invalidarCache()
-
     return NextResponse.json(resultados)
   } catch (err: any) {
     return NextResponse.json({ erro: err.message }, { status: 500 })
