@@ -16,26 +16,38 @@ async function baixarArquivo(link: string): Promise<Buffer> {
   return buffer
 }
 
+async function extrairTextoPDF(buffer: Buffer): Promise<string> {
+  const pdfjsLib = await import("pdfjs-dist/legacy/build/pdf.mjs")
+  const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(buffer) })
+  const pdf = await loadingTask.promise
+  let textoTotal = ""
+  for (let i = 1; i <= pdf.numPages; i++) {
+    const page = await pdf.getPage(i)
+    const content = await page.getTextContent()
+    const texto = content.items.map((item: any) => item.str).join(" ")
+    textoTotal += texto + "\n"
+  }
+  return textoTotal
+}
+
 export async function lerNotaLocal(link: string, valorEsperado: string) {
   const buffer = await baixarArquivo(link)
 
   let texto = ""
   try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const pdfParse = require("pdf-parse")
-    const data = await pdfParse(buffer)
-    texto = data.text || ""
+    texto = await extrairTextoPDF(buffer)
+    console.log("TEXTO EXTRAÍDO:", texto.slice(0, 300))
   } catch (err) {
-    console.error("Erro pdf-parse:", err)
+    console.error("Erro extração PDF:", err)
   }
 
   if (!texto || texto.trim().length === 0) {
     return { numeroNfse: "—", statusValidacao: "NÃO É NOTA", valorDetectado: "—" }
   }
 
-  console.log("TEXTO BRUTO:", texto.slice(0, 500))
-const temCnpj = ["61.895.820/0001-83", "61895820000183", "61.895.820/0001 83"].some(v => texto.includes(v))
+  const temCnpj = ["61.895.820/0001-83", "61895820000183", "61.895.820/0001 83"].some(v => texto.includes(v))
   if (!temCnpj) {
+    console.log("CNPJ não encontrado")
     return { numeroNfse: "—", statusValidacao: "NÃO É NOTA", valorDetectado: "—" }
   }
 
@@ -80,5 +92,6 @@ const temCnpj = ["61.895.820/0001-83", "61895820000183", "61.895.820/0001 83"].s
   const norm = (v: string) => v.replace(/\./g, "").replace(",", ".").trim()
   const statusValidacao = norm(valorDetectado) === norm(valorEsperado) ? "VALIDADO" : "DIVERGENTE"
 
+  console.log("NFS-e:", numeroNfse, "| Status:", statusValidacao, "| Detectado:", valorDetectado)
   return { numeroNfse, statusValidacao, valorDetectado }
 }
