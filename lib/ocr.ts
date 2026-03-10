@@ -20,7 +20,7 @@ export async function lerNotaLocal(link: string, valorEsperado: string) {
 
   let texto = ""
   try {
-    const pdfParse = (await import("pdf-parse")).default
+    const pdfParse = await import("pdf-parse")
     const data = await pdfParse(buffer)
     texto = data.text || ""
   } catch (err) {
