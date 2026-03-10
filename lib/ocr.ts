@@ -123,26 +123,64 @@ export async function lerNotaLocal(link: string, valorEsperado: string) {
 
   const texto = await extrairTextoViaVision(buffer, tipo)
 
-  if (!texto.includes(CNPJ_SCORPIONS)) {
+  // Normaliza o texto removendo espaços extras para busca do CNPJ
+  const textoNormalizado = texto.replace(/\s+/g, " ")
+  const cnpjVariantes = [
+    "61.895.820/0001-83",
+    "61895820000183",
+    "61.895.820/0001 83",
+    "61895820/0001-83",
+  ]
+  const temCnpj = cnpjVariantes.some(v => textoNormalizado.includes(v))
+
+  if (!temCnpj) {
     return { numeroNfse: "—", statusValidacao: "NÃO É NOTA", valorDetectado: "—" }
   }
 
   const linhas = texto.split("\n").map(l => l.trim()).filter(l => l.length > 0)
+  // Texto colado em uma linha só para regex mais amplos
+  const textoUnico = linhas.join(" ")
+
   let numeroNfse = "não encontrado"
   let valorDetectado = "não encontrado"
 
-  for (let i = 0; i < linhas.length; i++) {
-    if (/N[úu]mero\s+da\s+NFS-?e/i.test(linhas[i])) {
-      for (let j = i + 1; j < Math.min(i + 5, linhas.length); j++) {
-        const match = linhas[j].match(/^(\d+)$/)
-        if (match) { numeroNfse = match[1]; break }
+  // Busca número da NFS-e no texto contínuo
+  const nfseMatch = textoUnico.match(/N[úu]mero\s+da\s+NFS-?e\s+(\d+)/i)
+  if (nfseMatch) {
+    numeroNfse = nfseMatch[1]
+  } else {
+    // Fallback: busca linha a linha
+    for (let i = 0; i < linhas.length; i++) {
+      if (/N[úu]mero\s+da\s+NFS-?e/i.test(linhas[i])) {
+        for (let j = i + 1; j < Math.min(i + 5, linhas.length); j++) {
+          const match = linhas[j].match(/^(\d+)$/)
+          if (match) { numeroNfse = match[1]; break }
+        }
       }
     }
-    if (/Valor\s+L[íi]quido\s+da\s+NFS-?e/i.test(linhas[i])) {
-      for (let j = i + 1; j < Math.min(i + 5, linhas.length); j++) {
-        const match = linhas[j].match(/R\$\s*([\d.,]+)/)
-        if (match) { valorDetectado = match[1].trim(); break }
+  }
+
+  // Busca valor líquido no texto contínuo
+  const valorMatch = textoUnico.match(/Valor\s+L[íi]quido\s+da\s+NFS-?e\s+R\$\s*([\d.,]+)/i)
+  if (valorMatch) {
+    valorDetectado = valorMatch[1].trim()
+  } else {
+    // Fallback: busca linha a linha
+    for (let i = 0; i < linhas.length; i++) {
+      if (/Valor\s+L[íi]quido\s+da\s+NFS-?e/i.test(linhas[i])) {
+        for (let j = i + 1; j < Math.min(i + 5, linhas.length); j++) {
+          const match = linhas[j].match(/R\$\s*([\d.,]+)/)
+          if (match) { valorDetectado = match[1].trim(); break }
+        }
       }
+    }
+  }
+
+  // Se ainda não achou, tenta pegar qualquer R$ perto do final do documento
+  if (valorDetectado === "não encontrado") {
+    const matches = [...textoUnico.matchAll(/R\$\s*([\d.,]+)/gi)]
+    if (matches.length > 0) {
+      valorDetectado = matches[matches.length - 1][1].trim()
     }
   }
 
