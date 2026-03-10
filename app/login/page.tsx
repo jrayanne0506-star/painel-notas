@@ -12,7 +12,7 @@ export default function Login() {
 
   const usuariosValidos = [
     { usuario: "admin", senha: "135791" },
-    { usuario: "teste", senha: "teste" }
+    { usuario: "Leyde", senha: "Leyde2026" }
   ]
 
   function entrar(e: React.FormEvent) {
