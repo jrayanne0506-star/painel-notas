@@ -16,15 +16,14 @@
     "jsonwebtoken": "^9.0.3",
     "lucide-react": "^0.577.0",
     "next": "16.1.6",
-    "pdf-parse": "^2.4.5",
-    "pdfjs-dist": "^5.5.207",
     "playwright": "^1.58.2",
     "react": "19.2.3",
     "react-datepicker": "^9.1.0",
     "react-dom": "19.2.3",
     "recharts": "^3.8.0",
     "tesseract.js": "^7.0.0",
-    "ts-node": "^10.9.2"
+    "ts-node": "^10.9.2",
+    "unpdf": "^1.4.0"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
