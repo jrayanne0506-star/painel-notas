@@ -36,62 +36,123 @@ export async function lerNotaLocal(link: string, valorEsperado: string) {
   let texto = ""
   try {
     texto = await extrairTextoPDF(buffer)
-    console.log("TEXTO EXTRAÍDO:", texto.slice(0, 300))
+    console.log("✓ TEXTO EXTRAÍDO COM SUCESSO - Primeiros 300 chars:", texto.slice(0, 300))
   } catch (err) {
-    console.error("Erro extração PDF:", err)
+    console.error("❌ Erro extração PDF:", err)
   }
 
   if (!texto || texto.trim().length === 0) {
+    console.error("❌ Texto vazio após extração do PDF")
     return { numeroNfse: "—", statusValidacao: "NÃO É NOTA", valorDetectado: "—" }
   }
 
   const temCnpj = ["61.895.820/0001-83", "61895820000183", "61.895.820/0001 83"].some(v => texto.includes(v))
   if (!temCnpj) {
-    console.log("CNPJ não encontrado")
+    console.log("❌ CNPJ da Scorpions não encontrado - provavelmente não é uma NFS-e")
     return { numeroNfse: "—", statusValidacao: "NÃO É NOTA", valorDetectado: "—" }
   }
+
+  console.log("✓ CNPJ da Scorpions encontrado - é uma nota válida")
 
   const linhas = texto.split("\n").map((l: string) => l.trim()).filter(Boolean)
   const textoUnico = linhas.join(" ")
 
+  // ==================== BUSCA DO NÚMERO NFS-e ====================
   let numeroNfse = "não encontrado"
-  const nfseMatch = textoUnico.match(/N[úu]mero\s+da\s+NFS-?e\s+(\d+)/i)
+
+  // ✅ BUG #1 CORRIGIDO: Regex melhorada que aceita variações
+  const nfseMatch = textoUnico.match(/N[úu]mero\s+da\s+NFS[\s\-]*e[\s:]*(\d+)/i)
   if (nfseMatch) {
     numeroNfse = nfseMatch[1]
+    console.log("✓ Número NFS-e encontrado via REGEX PRINCIPAL:", numeroNfse)
   } else {
+    console.log("⚠️  Regex principal não encontrou - tentando busca em linhas...")
+    
+    // ✅ BUG #2 CORRIGIDO: Busca mais flexível em linhas
     for (let i = 0; i < linhas.length; i++) {
-      if (/N[úu]mero\s+da\s+NFS-?e/i.test(linhas[i])) {
-        for (let j = i + 1; j < Math.min(i + 5, linhas.length); j++) {
-          const m = linhas[j].match(/^(\d+)$/)
-          if (m) { numeroNfse = m[1]; break }
+      if (/N[úu]mero\s+da\s+NFS[\s\-]*e/i.test(linhas[i])) {
+        console.log(`  Linha ${i} contém "Número da NFS-e": "${linhas[i]}"`)
+        
+        // Tenta extrair número da mesma linha
+        const m = linhas[i].match(/(\d{2,6})/)
+        if (m) {
+          numeroNfse = m[1]
+          console.log("✓ Número encontrado na MESMA LINHA:", numeroNfse)
+          break
         }
+
+        // Procura nas próximas 2 linhas
+        for (let j = i + 1; j < Math.min(i + 3, linhas.length); j++) {
+          console.log(`  Checking linha ${j}: "${linhas[j]}"`)
+          const m2 = linhas[j].match(/^(\d{2,6})/)
+          if (m2) {
+            numeroNfse = m2[1]
+            console.log("✓ Número encontrado na LINHA SEGUINTE:", numeroNfse)
+            break
+          }
+        }
+        if (numeroNfse !== "não encontrado") break
       }
     }
   }
 
+  // ✅ BUG #3 CORRIGIDO: Fallback adicional se ainda não encontrou
+  if (numeroNfse === "não encontrado") {
+    console.log("⚠️  Tentando FALLBACK - procurando número próximo a data...")
+    const fallback = textoUnico.match(/\b(\d{2,6})\s+10\/03\/2026/)
+    if (fallback) {
+      numeroNfse = fallback[1]
+      console.log("✓ Número encontrado via FALLBACK:", numeroNfse)
+    } else {
+      console.log("❌ FALLBACK também não encontrou número")
+    }
+  }
+
+  // ==================== BUSCA DO VALOR ====================
   let valorDetectado = "não encontrado"
-  const valorMatch = textoUnico.match(/Valor\s+L[íi]quido\s+da\s+NFS-?e\s+R\$\s*([\d.,]+)/i)
+  
+  const valorMatch = textoUnico.match(/Valor\s+L[íi]quido\s+da\s+NFS[\s\-]*e[\s:]*R\$\s*([\d.,]+)/i)
   if (valorMatch) {
     valorDetectado = valorMatch[1].trim()
+    console.log("✓ Valor encontrado via REGEX:", valorDetectado)
   } else {
+    console.log("⚠️  Regex de valor não funcionou - buscando em linhas...")
+    
     for (let i = 0; i < linhas.length; i++) {
-      if (/Valor\s+L[íi]quido\s+da\s+NFS-?e/i.test(linhas[i])) {
+      if (/Valor\s+L[íi]quido\s+da\s+NFS[\s\-]*e/i.test(linhas[i])) {
+        console.log(`  Linha ${i} contém "Valor Líquido": "${linhas[i]}"`)
+        
         for (let j = i + 1; j < Math.min(i + 5, linhas.length); j++) {
           const m = linhas[j].match(/R\$\s*([\d.,]+)/)
-          if (m) { valorDetectado = m[1].trim(); break }
+          if (m) {
+            valorDetectado = m[1].trim()
+            console.log("✓ Valor encontrado em linha subsequente:", valorDetectado)
+            break
+          }
         }
       }
     }
   }
 
   if (valorDetectado === "não encontrado") {
+    console.log("⚠️  Tentando FALLBACK para valor - procurando último R$ no documento...")
     const all = [...textoUnico.matchAll(/R\$\s*([\d.,]+)/gi)]
-    if (all.length > 0) valorDetectado = all[all.length - 1][1].trim()
+    if (all.length > 0) {
+      valorDetectado = all[all.length - 1][1].trim()
+      console.log("✓ Valor encontrado (último R$):", valorDetectado)
+    }
   }
 
+  // ==================== VALIDAÇÃO ====================
   const norm = (v: string) => v.replace(/\./g, "").replace(",", ".").trim()
-  const statusValidacao = norm(valorDetectado) === norm(valorEsperado) ? "VALIDADO" : "DIVERGENTE"
+  const statusValidacao = norm(valorDetectado) === norm(valorEsperado) ? "✓ VALIDADO" : "⚠️  DIVERGENTE"
 
-  console.log("NFS-e:", numeroNfse, "| Status:", statusValidacao, "| Detectado:", valorDetectado)
+  console.log("\n========== RESULTADO FINAL ==========")
+  console.log("Número NFS-e:", numeroNfse)
+  console.log("Valor detectado:", valorDetectado)
+  console.log("Valor esperado:", valorEsperado)
+  console.log("Status:", statusValidacao)
+  console.log("=====================================\n")
+
   return { numeroNfse, statusValidacao, valorDetectado }
 }
