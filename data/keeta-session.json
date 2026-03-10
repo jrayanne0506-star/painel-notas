@@ -1,0 +1,292 @@
+{
+  "cookies": [
+    {
+      "name": "com.keetapp.sailorfe.d.pc_strategy",
+      "value": "",
+      "domain": "courier.mykeeta.com",
+      "path": "/",
+      "expires": -1,
+      "httpOnly": false,
+      "secure": true,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "_lxsdk_cuid",
+      "value": "19cd42df5c0c8-07933f6f82594f-74425f12-e1000-19cd42df5c0c8",
+      "domain": ".mykeeta.com",
+      "path": "/",
+      "expires": 1807646307.776794,
+      "httpOnly": false,
+      "secure": false,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "_lxsdk_s",
+      "value": "19cd42df5c1-dfa-4ed-2c4%7C%7C0",
+      "domain": ".mykeeta.com",
+      "path": "/",
+      "expires": 1773088107,
+      "httpOnly": false,
+      "secure": false,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "WEBDFPID",
+      "value": "wz451y6wzzv25w160zzx5567650vw6x880xw57wux7x97958wv614u8x-1773172709559-1773086307800ASOIIKK75613c134b6a252faa6802015be905514213",
+      "domain": ".mykeeta.com",
+      "path": "/",
+      "expires": 1807646376.668395,
+      "httpOnly": false,
+      "secure": false,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "ctxId-76b4bb521c",
+      "value": "fFXNMNoUe0cF8cmguxIvUnwgZLvfyuuy",
+      "domain": "ssosv.sankuai.com",
+      "path": "/",
+      "expires": 1773089910.58658,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "None"
+    },
+    {
+      "name": "ctxId-94a2e31540",
+      "value": "eS86YjGP2zn6LCV4OTpPcauQqA4l4QH3",
+      "domain": "ssosv.sankuai.com",
+      "path": "/",
+      "expires": 1773089910.613932,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "None"
+    },
+    {
+      "name": "ctxId",
+      "value": "eS86YjGP2zn6LCV4OTpPcauQqA4l4QH3",
+      "domain": "ssosv.sankuai.com",
+      "path": "/",
+      "expires": 1773089910.613968,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "None"
+    },
+    {
+      "name": "_lxsdk_cuid",
+      "value": "19cd42e02cfc8-0e2df745469ddc8-74425f12-e1000-19cd42e02cfc8",
+      "domain": ".sankuai.com",
+      "path": "/",
+      "expires": 1807646311.119665,
+      "httpOnly": false,
+      "secure": false,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "_lxsdk",
+      "value": "19cd42e02cfc8-0e2df745469ddc8-74425f12-e1000-19cd42e02cfc8",
+      "domain": ".sankuai.com",
+      "path": "/",
+      "expires": 1807646311.120009,
+      "httpOnly": false,
+      "secure": false,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "webDeviceUuid",
+      "value": "19cd42e02cfc8-0e2df745469ddc8-74425f12-e1000-19cd42e02cfc8",
+      "domain": "ssosv.sankuai.com",
+      "path": "/",
+      "expires": -1,
+      "httpOnly": false,
+      "secure": true,
+      "sameSite": "None"
+    },
+    {
+      "name": "u2dhn6k",
+      "value": "1a0322dd5432db53d63332de2a985b55",
+      "domain": "ssosv.sankuai.com",
+      "path": "/",
+      "expires": 1804622312.393628,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "None"
+    },
+    {
+      "name": "WEBDFPID",
+      "value": "5w5652u967vz5x2y0y85u29y8960u75980xw57v9z6097958vu54uxu4-1773172713170-1773086311461AMAMGGM75613c134b6a252faa6802015be905513733",
+      "domain": ".sankuai.com",
+      "path": "/",
+      "expires": 1807646367.517301,
+      "httpOnly": false,
+      "secure": false,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "utm_source_rg",
+      "value": "AM%25beD8E8J%25485%25A2AyAi4tyZdvAjiECEDA4itEDtyC4ZAtDCj2AZdtvyCtZtADd4AM4j4M",
+      "domain": ".sankuai.com",
+      "path": "/",
+      "expires": 1807646313,
+      "httpOnly": false,
+      "secure": false,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "TGCN",
+      "value": "002dbfd94e1d47919a3c*c2a63efa952",
+      "domain": "ssosv.sankuai.com",
+      "path": "/",
+      "expires": 1774299564.910318,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "None"
+    },
+    {
+      "name": "acid",
+      "value": "AwQAAAAbBktNUwwiDD1sQYFwGXjb7aH4ryi51e7cAwgBAAAAVHEQO7cbyVBrMjgOuTE5iEUOOROMC0ZN5LfXw754lvwxB6oep%2FQYl8En59LdjA8BG9WpKnvWNaFCxd6Zjre8XoUQbNXFuGiKH1ksge%2BXC7j%2FjDQb1w%3D%3D",
+      "domain": "ssosv.sankuai.com",
+      "path": "/",
+      "expires": 1807646366.767866,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "None"
+    },
+    {
+      "name": "logan_session_token",
+      "value": "cezdtnincaqj56kzwugn",
+      "domain": "ssosv.sankuai.com",
+      "path": "/",
+      "expires": -1,
+      "httpOnly": false,
+      "secure": false,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "TGCX",
+      "value": "eAHjYHGawCikYJhoYGxklJJiamJslJJkapxiZmwMZKUaJVpamCaZmiqsbV_w6KKxBqORgoEBUEVaiqVJqmGKibmloWWicbJWslGimXFqWqKlqZHF3sPTeBwYPVZ_373wrHHAvA0gahIjR3hqUnByal7qIkaCtgEABCouLw**eAENwoERACEIA7CVRMGWcR6O7j-Cfwlg6crRLe65LKuRq7kPoxMuiPb5b1lQ1D5dmgrHIuIBQtARrg",
+      "domain": "ssosv.sankuai.com",
+      "path": "/",
+      "expires": 1774299574.00593,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "None"
+    },
+    {
+      "name": "_lxsdk_s",
+      "value": "19cd42e02cf-db-071-a8d%7C%7C8",
+      "domain": ".sankuai.com",
+      "path": "/",
+      "expires": 1773088175,
+      "httpOnly": false,
+      "secure": false,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "94a2e31540_ssoid",
+      "value": "eAHjYBTYe3gaj8L7lR1zzxkbcVmaJBqlGhuamhhYKRgYGKUkpaVYmqQappiYWxpaJhonayUbJZoZp6YlWpoaOU1gFFIwTDQwNjJKSTE1MQaqNjVOMTM2BrJSjRItLUyTTE0V1rYveHTRWIPRiKB5FiCXODB6rP6-e-FZ44B5G0DUJEaO8NSk4OTUvNRFjARti1IwNzMzsUwxtky20DIxMUlMsTBMNDc3t0wzt7BIMzBPNpnEqJAabGEWmeUeYFSVZ-bjHGbiH1IQkJxYGljoaJJjEuhhPItRMKko3ifU1dc1KNjfzzjAx8BoAeP7xj1A5wAAAYddww**eAEFwYkBADAEBLCVOJSO46n9R2ii3j7mnA2mMJUIFWRhTSlpq24PLgqdh2m8iRly8ACZ1Q8ehxDN**OocGkNxx7_YD2L1wTXOQ_WTRnd1hjiIVWFhYN2zq11HSzxDOluhYpq0Qpp8uI7IKL5nub-RCDNCX28UKuc6sLQ**MjU1MzQ5MDksYnJfTFVFTUVSU09OM1BMMDIsTFVFTUVSU09OM1BMLHNjb3JwaW9ucy5maW5hbmNlaXJvQGdtYWlsLmNvbSwxLGVkY18yNTUzNDkwOSwxNzczMzQ1NTc2MTc1",
+      "domain": "courier.mykeeta.com",
+      "path": "/",
+      "expires": 1773345576.374731,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "None"
+    },
+    {
+      "name": "logan_session_token",
+      "value": "ywf20a2g3gagco0bsmbe",
+      "domain": "courier.mykeeta.com",
+      "path": "/",
+      "expires": -1,
+      "httpOnly": false,
+      "secure": false,
+      "sameSite": "Lax"
+    }
+  ],
+  "origins": [
+    {
+      "origin": "https://courier.mykeeta.com",
+      "localStorage": [
+        {
+          "name": "dfp_timestamp",
+          "value": "1773172709559"
+        },
+        {
+          "name": "i18nLocale",
+          "value": "en"
+        },
+        {
+          "name": "dfpId",
+          "value": "wz451y6wzzv25w160zzx5567650vw6x880xw57wux7x97958wv614u8x"
+        },
+        {
+          "name": "wenshu_horn_uuid",
+          "value": "8988d49c92d117f6"
+        },
+        {
+          "name": "7_aygwq9auvb_en_d_partner_pc",
+          "value": "{\"kv\":{\"d_partner_admin_menu_unfold_btn_text\":\"Unfold\",\"d_partner_admin_menu_courier_registration\":\"New courier registration\",\"d_partner_admin_menu_fold_btn_text\":\"Fold\",\"d_partner_admin_logout_btn_text\":\"Log out\",\"d_partner_admin_menu_realtime_monitor\":\"Real-time monitoring\",\"d_partner_admin_menu_stuff_info_management\":\"Courier Management\",\"control_over_invoices\":\"Tax Invoice Management\",\"franchisee_billing_details\":\"Billings\",\"franchisee_payment_details\":\"Payment Details\",\"financial_management\":\"Financial Management\",\"sidebar_courier_real_time_monitor\":\"Real-time Courier Monitor\",\"sidebar_operation_center\":\"Operation Centre\",\"testview_details\":\"View details\\n\",\"testskip\":\"Skip\\n\",\"test0message_center\":\"Message Centre\",\"testok\":\"OK\\n\",\"d_partner_admin_menuoperations_personnel_management\":\"Team management\",\"d_partner_admin_menusupervision_group_management\":\"Supervisory Group\",\"d_partner_admin_menupersonnel_management\":\"Staff Management\",\"d_partner_admin_menu_order_center\":\"Order Centre\",\"sidebar_menu_data\":\"Data Report\",\"sidebar_menu_operation\":\"Operation Analysis\",\"sidebar_menu_live\":\"Live Monitoring\",\"violation_center\":\"Violation Centre\",\"d_partner_admin_menu_management_center\":\"Courier information\",\"manage_3pl_partner_P\":\"Partner Profile\",\"violation_penalty_penalty_manage\":\"Penalty management\",\"trace_search_order_id\":\"Order ID\",\"shift_management\":\"Shift management\",\"workbench3PL__incentive_management\":\"Incentive management\",\"workbench3PL_target_management\":\"Target management\",\"Keeta_D_cnpj_NSk8\":\"CNPJ passed?\",\"Keeta_D_Recruiting_riders_xk3S\":\"Courier recruitment\",\"partner_shift_manager_dashboard\":\"Shift Management\",\"Keeta_D_Equipment_rider_pnhR\":\"Courier equipment\",\"Keeta_D_Adjustment_Payroll_HR5W\":\"Earnings adjustment\",\"Keeta_D_Compliance_Management_RVxk\":\"Courier compliance management\",\"Keeta_D_performance_planning_JZDW\":\"Commission\",\"Keeta_D_performance_management_NRaW\":\"Performance management\",\"D_message_platform_Here_click_PxGf\":\"Click here\",\"D_message_platform_processing_later_Z9CC\":\"Later\",\"D_message_platform_Confirm_offline_rHar\":\"Please submit your feedback by {time} (confirmation deadline). If overdue, it will be considered confirmed by default. For any issues, contact the PMM offline.\",\"D_message_platform_Confirm_View_l2Ip\":\"view confirmation\",\"D_message_platform_Feedback_pmm_16uX\":\"Please submit your feedback by {time} (feedback deadline). For any issues, contact the PMM offline.\",\"D_message_platform_Offline_View_exjO\":\"Please submit your feedback by {time} (feedback deadline). For any issues, contact the PMM offline.\",\"D_message_platform_Confirmation_aPve\":\"I have confirmed\",\"D_message_platform__Cq3L\":\"to\",\"D_message_platform_Confirmation_CK79\":\"Confirmed\",\"D_message_platform_Feedback_pmm_F2J8\":\"The feedback deadline has passed. It is considered confirmed by default. For any issues, contact the PMM offline.\",\"Keeta_D_highlight_confirming_2O6n\":\"You can <highlight>click here</highlight> to view and confirm.\",\"Keeta_D_highlight_downloading_sbhZ\":\"You can go to <highlight>Notification Centre</highlight> to download the original file.\",\"Keeta_D_Strong_platoon_progress_RfOU\":\"Experience score progress\",\"Keeta_D_Mission_Center_5r66\":\"Task centre\",\"Keeta_D_Scroll_Target_FD0T\":\"Indicative capacity allocation\",\"Keeta_D_optimization_cooperation_tpjX\":\"Optimisation centre\"},\"version\":\"56\",\"createTime\":1773086308575,\"isLanguagePackage\":true}"
+        },
+        {
+          "name": "_horn_wenshu-websdk",
+          "value": "{\"expireTime\":1773086614312,\"originValue\":{\"customer\":{\"domain\":[\"meituan.com\",\"sankuai.com\",\"dp.com\",\"dianping.com\",\"mykeeta.com\",\"keetapp.com\"],\"forward\":false,\"l_dss\":true,\"l_skb\":true,\"only_bridge\":false,\"show_d\":false,\"time_out\":500,\"version\":\"1.3.9\"},\"horn\":{\"cacheDuration\":5,\"cleanCacheForUpgrade\":false,\"overTime\":false,\"pollDuration\":-1,\"pollPeriod\":[\"00:01\",\"23:59\"],\"rateLimit\":0,\"time\":\"N/A\",\"url\":\"N/A\",\"version\":1213963},\"hornId\":\"wenshu-websdk\"}}"
+        },
+        {
+          "name": "3PL_I18NPACKS",
+          "value": "{\"region\":\"\",\"regionList\":[],\"locale\":\"\",\"localeList\":[]}"
+        },
+        {
+          "name": "__lxsdk__lxsdk_cuid",
+          "value": "\"19cd42df5c0c8-07933f6f82594f-74425f12-e1000-19cd42df5c0c8\""
+        },
+        {
+          "name": "localId",
+          "value": "1773086307800ASOIIKK75613c134b6a252faa6802015be905514213"
+        },
+        {
+          "name": "dfp_params_list",
+          "value": "{\"close_knb_sign\":0,\"auto_init\":0,\"black_host\":[\"gatewaydsp.meituan.com\",\"portal-portm.meituan.com\",\"dd.sankuai.com\",\"dd.meituan.com\",\"catfront.dianping.com\",\"catfront.51ping.com\",\"report.meituan.com\",\"dreport.meituan.net\",\"postreport.meituan.com\",\"wreport1.meituan.net\",\"lx0.meituan.com\",\"lx1.meituan.net\",\"lx2.meituan.net\",\"plx.meituan.com\",\"hlx.meituan.com\",\"ad.e.waimai.sankuai.com:80\",\"speech-inspection.vip.sankuai.com\",\"kms.sankuai.com\",\"r.dianping.com\",\"r1.dianping.com\",\"api-channel.waimai.meituan.com\",\"lion-monitor.sankuai.com\",\"cat-config.sankuai.com\",\"catdot.sankuai.com\",\"s3plus.meituan.net\",\"ebooking.meituan.com\",\"eb.hotel.test.sankuai.com\",\"eb.vip.sankuai.com\",\"eb.meituan.com\",\"logan.sankuai.com\",\"mads.meituan.com\",\"mlog.dianping.com\",\"oneservice.meituan.com\",\"api-unionid.meituan.com\",\"fe-config.meituan.com\",\"fe-config0.meituan.com\",\"h.meituan.com\",\"p.meituan.com\",\"peisong-collector.meituan.com\",\"wreport2.meituan.net\",\"hreport.meituan.com\",\"c.qcs.test.sankuai.com\",\"dache.st.meituan.com\",\"dache.meituan.com\",\"horn-hk.mykeeta.com\",\"h-eu.mykeeta.com\",\"rapfront.mykeeta.com\",\"p3-hk.d.mykeeta.com\",\"p1-hk.d.mykeeta.com\",\"catfront-eu.mykeeta.com\",\"lx1-eu.mykeeta.com\",\"lx2-eu.mykeeta.com\",\"plx-eu.mykeeta.com\",\"lx1.mykeeta.com\",\"lx2.mykeeta.com\",\"plx.mykeeta.com\",\"i18n.mykeeta.com\",\"i18n-eu.mykeeta.com\"],\"black_url\":[\"syncloud.meituan.com/be/chp/takeaway/\",\"syncloud.meituan.com/be/chp/takeawayClassifyManagement/\",\"syncloud.meituan.com/be/chp/createSkuToTakeaway/\",\"i.meituan.com/api/address\",\"i.meituan.com/api/maf\",\"mapi.dianping.com/mapi/mlog/applog.bin\",\"mapi.dianping.com/mapi/mlog/zlog.bin\",\"mapi.dianping.com/mapi/mlog/mtmidas.bin\",\"mapi.dianping.com/mapi/mlog/mtzmidas.bin\",\"m.dianping.com/adp/log\",\"mlog.meituan.com/log\",\"mlog.dianping.com/log\",\"m.api.dianping.com/mapi/mlog/applog.bin\",\"m.api.dianping.com/mapi/mlog/zlog.bin\",\"m.api.dianping.com/mapi/mlog/mtmidas.bin\",\"m.api.dianping.com/mapi/mlog/mtzmidas.bin\",\"peisong.meituan.com/collector/report/logdata/short/batch\",\"transcode-video.sankuai.com/pfop\",\"peisong.meituan.com/api/collector/collector/report/logdata/short/batch\",\"api-map.meituan.com/tile/style\",\"api-map01.meituan.com/tile/style\",\"api-map02.meituan.com/tile/style\",\"api-map03.meituan.com/tile/style\",\"api-map04.meituan.com/tile/style\",\"api-map05.meituan.com/tile/style\",\"api-map.meituan.com/tile/source\",\"api-map01.meituan.com/tile/source\",\"api-map02.meituan.com/tile/source\",\"api-map03.meituan.com/tile/source\",\"api-map04.meituan.com/tile/source\",\"api-map05.meituan.com/tile/source\",\"api-map.meituan.com/tile/font\",\"api-map01.meituan.com/tile/font\",\"api-map02.meituan.com/tile/font\",\"api-map03.meituan.com/tile/font\",\"api-map04.meituan.com/tile/font\",\"api-map05.meituan.com/tile/font\",\"api-map.meituan.com/tile/grid\",\"api-map01.meituan.com/tile/grid\",\"api-map02.meituan.com/tile/grid\",\"api-map03.meituan.com/tile/grid\",\"api-map04.meituan.com/tile/grid\",\"api-map05.meituan.com/tile/grid\",\"api-map.meituan.com/tile/dem\",\"api-map01.meituan.com/tile/dem\",\"api-map02.meituan.com/tile/dem\",\"api-map03.meituan.com/tile/dem\",\"api-map04.meituan.com/tile/dem\",\"api-map05.meituan.com/tile/dem\",\"api-map.meituan.com/render/traffic\",\"api-map01.meituan.com/render/traffic\",\"api-map02.meituan.com/render/traffic\",\"api-map03.meituan.com/render/traffic\",\"api-map04.meituan.com/render/traffic\",\"api-map05.meituan.com/render/traffic\",\"api-map.meituan.com/tile/model\",\"api-map01.meituan.com/tile/model\",\"api-map02.meituan.com/tile/model\",\"api-map03.meituan.com/tile/model\",\"api-map04.meituan.com/tile/model\",\"api-map05.meituan.com/tile/model\",\"spotter-relay.sankuai.com/auk01/\",\"spotter-livevod.vip.sankuai.com/recordings/auk01/\",\"e.dianping.com/joy/merchant/newuploadimage\",\"e.51ping.com/joy/merchant/newuploadimage\",\"spotter-relay.sankuai.com/maiot/\",\"wx-shangou.meituan.com/quickbuy/v2/activity/supersale/getLocationByIp\",\"wx-shangou.meituan.com/quickbuy/v2/activity/supersale/bigPromotionHeadInfo\",\"wx-shangou.meituan.com/quickbuy/v2/activity/supersale/bigPromotionResourceInfo\",\"wx-shangou.meituan.com/quickbuy/v1/user/address/posname\",\"wx-shangou.meituan.com/quickbuy/v1/activity/supersale/grab/queryUserSubscription\",\"transcode-video.cloud.test.sankuai.com/pfop\",\"ecom.meituan.com/emis/gw/PublishAssistantQueryService/queryFieldRequirements\",\"ecom.meituan.com/emis/gw/PublishAssistantValidateService/realTimeValidateProduct\",\"ecom.meishi.test.meituan.com/emis/gw/PublishAssistantQueryService/queryFieldRequirements\",\"ecom.meishi.test.meituan.com/emis/gw/PublishAssistantValidateService/realTimeValidateProduct\",\"mlog.51ping.com/adlog\",\"clcadlog.meituan.com/adlog\"],\"init_black_url\":[],\"init_white_url\":[],\"header_white_host\":[],\"init_white_host\":[],\"init_black_host\":[],\"white_host\":[\".dianping.com\",\".meituan.com\",\".sankuai.com\",\".maoyan.com\",\".neixin.cn\",\".51ping.com\",\".baobaoaichi.cn\",\".dper.com\",\".jchunuo.com\",\".mykeeta.com\",\".keetapp.com\",\".keetainc.com\",\".keeta-global.com\"],\"swim_black_host\":[\"ebooking.meituan.com\",\"eb.hotel.test.sankuai.com\",\"eb.vip.sankuai.com\",\"eb.meituan.com\",\"c.qcs.test.sankuai.com\",\"dache.st.meituan.com\",\"dache.meituan.com\"],\"package_info\":{\"ver\":\"1.1.2\",\"min\":\"4.0.0\",\"url_backup\":\"https://msp-backup.meituan.net/h5guard-files/package-1.1.2.js\",\"url\":\"https://msp.meituan.net/h5guard-files/package-1.1.2.js\"}}"
+        }
+      ]
+    },
+    {
+      "origin": "https://ssosv.sankuai.com",
+      "localStorage": [
+        {
+          "name": "dfp_timestamp",
+          "value": "1773172713170"
+        },
+        {
+          "name": "dfpId",
+          "value": "5w5652u967vz5x2y0y85u29y8960u75980xw57v9z6097958vu54uxu4"
+        },
+        {
+          "name": "__sso_web_device_info",
+          "value": "{\"platformVersion\":\"10.0\",\"platform\":\"Windows\"}"
+        },
+        {
+          "name": "_username",
+          "value": "br_LUEMERSON3PL02"
+        },
+        {
+          "name": "sso_country_selected",
+          "value": "+55"
+        },
+        {
+          "name": "__lxsdk__lxsdk_cuid",
+          "value": "\"19cd42e02cfc8-0e2df745469ddc8-74425f12-e1000-19cd42e02cfc8\""
+        },
+        {
+          "name": "localId",
+          "value": "1773086311461AMAMGGM75613c134b6a252faa6802015be905513733"
+        },
+        {
+          "name": "sg_random",
+          "value": "dfd3d1b1f4054104beb76f7cd5d1507b"
+        },
+        {
+          "name": "dfp_params_list",
+          "value": "{\"auto_init\":0,\"black_host\":[\"gatewaydsp.meituan.com\",\"portal-portm.meituan.com\",\"dd.sankuai.com\",\"dd.meituan.com\",\"catfront.dianping.com\",\"catfront.51ping.com\",\"report.meituan.com\",\"dreport.meituan.net\",\"postreport.meituan.com\",\"wreport1.meituan.net\",\"lx0.meituan.com\",\"lx1.meituan.net\",\"lx2.meituan.net\",\"plx.meituan.com\",\"hlx.meituan.com\",\"ad.e.waimai.sankuai.com:80\",\"speech-inspection.vip.sankuai.com\",\"kms.sankuai.com\",\"r.dianping.com\",\"r1.dianping.com\",\"api-channel.waimai.meituan.com\",\"lion-monitor.sankuai.com\",\"cat-config.sankuai.com\",\"catdot.sankuai.com\",\"s3plus.meituan.net\",\"ebooking.meituan.com\",\"eb.hotel.test.sankuai.com\",\"eb.vip.sankuai.com\",\"eb.meituan.com\",\"logan.sankuai.com\",\"mads.meituan.com\",\"mlog.dianping.com\",\"oneservice.meituan.com\",\"api-unionid.meituan.com\",\"fe-config.meituan.com\",\"fe-config0.meituan.com\",\"h.meituan.com\",\"p.meituan.com\",\"peisong-collector.meituan.com\",\"wreport2.meituan.net\",\"hreport.meituan.com\",\"c.qcs.test.sankuai.com\",\"dache.st.meituan.com\",\"dache.meituan.com\"],\"black_url\":[\"syncloud.meituan.com/be/chp/takeaway/\",\"syncloud.meituan.com/be/chp/takeawayClassifyManagement/\",\"syncloud.meituan.com/be/chp/createSkuToTakeaway/\",\"i.meituan.com/api/address\",\"i.meituan.com/api/maf\",\"mapi.dianping.com/mapi/mlog/applog.bin\",\"mapi.dianping.com/mapi/mlog/zlog.bin\",\"mapi.dianping.com/mapi/mlog/mtmidas.bin\",\"mapi.dianping.com/mapi/mlog/mtzmidas.bin\",\"m.dianping.com/adp/log\",\"mlog.meituan.com/log\",\"mlog.dianping.com/log\",\"m.api.dianping.com/mapi/mlog/applog.bin\",\"m.api.dianping.com/mapi/mlog/zlog.bin\",\"m.api.dianping.com/mapi/mlog/mtmidas.bin\",\"m.api.dianping.com/mapi/mlog/mtzmidas.bin\",\"peisong.meituan.com/collector/report/logdata/short/batch\",\"transcode-video.sankuai.com/pfop\",\"peisong.meituan.com/api/collector/collector/report/logdata/short/batch\",\"api-map.meituan.com/tile/style\",\"api-map01.meituan.com/tile/style\",\"api-map02.meituan.com/tile/style\",\"api-map03.meituan.com/tile/style\",\"api-map04.meituan.com/tile/style\",\"api-map05.meituan.com/tile/style\",\"api-map.meituan.com/tile/source\",\"api-map01.meituan.com/tile/source\",\"api-map02.meituan.com/tile/source\",\"api-map03.meituan.com/tile/source\",\"api-map04.meituan.com/tile/source\",\"api-map05.meituan.com/tile/source\",\"api-map.meituan.com/tile/font\",\"api-map01.meituan.com/tile/font\",\"api-map02.meituan.com/tile/font\",\"api-map03.meituan.com/tile/font\",\"api-map04.meituan.com/tile/font\",\"api-map05.meituan.com/tile/font\",\"api-map.meituan.com/tile/grid\",\"api-map01.meituan.com/tile/grid\",\"api-map02.meituan.com/tile/grid\",\"api-map03.meituan.com/tile/grid\",\"api-map04.meituan.com/tile/grid\",\"api-map05.meituan.com/tile/grid\",\"api-map.meituan.com/tile/dem\",\"api-map01.meituan.com/tile/dem\",\"api-map02.meituan.com/tile/dem\",\"api-map03.meituan.com/tile/dem\",\"api-map04.meituan.com/tile/dem\",\"api-map05.meituan.com/tile/dem\",\"api-map.meituan.com/render/traffic\",\"api-map01.meituan.com/render/traffic\",\"api-map02.meituan.com/render/traffic\",\"api-map03.meituan.com/render/traffic\",\"api-map04.meituan.com/render/traffic\",\"api-map05.meituan.com/render/traffic\",\"api-map.meituan.com/tile/model\",\"api-map01.meituan.com/tile/model\",\"api-map02.meituan.com/tile/model\",\"api-map03.meituan.com/tile/model\",\"api-map04.meituan.com/tile/model\",\"api-map05.meituan.com/tile/model\",\"spotter-relay.sankuai.com/auk01/\",\"spotter-livevod.vip.sankuai.com/recordings/auk01/\",\"e.dianping.com/joy/merchant/newuploadimage\",\"e.51ping.com/joy/merchant/newuploadimage\",\"spotter-relay.sankuai.com/maiot/\",\"wx-shangou.meituan.com/quickbuy/v2/activity/supersale/getLocationByIp\",\"wx-shangou.meituan.com/quickbuy/v2/activity/supersale/bigPromotionHeadInfo\",\"wx-shangou.meituan.com/quickbuy/v2/activity/supersale/bigPromotionResourceInfo\",\"wx-shangou.meituan.com/quickbuy/v1/user/address/posname\",\"wx-shangou.meituan.com/quickbuy/v1/activity/supersale/grab/queryUserSubscription\",\"transcode-video.cloud.test.sankuai.com/pfop\",\"ecom.meituan.com/emis/gw/PublishAssistantQueryService/queryFieldRequirements\",\"ecom.meituan.com/emis/gw/PublishAssistantValidateService/realTimeValidateProduct\",\"ecom.meishi.test.meituan.com/emis/gw/PublishAssistantQueryService/queryFieldRequirements\",\"ecom.meishi.test.meituan.com/emis/gw/PublishAssistantValidateService/realTimeValidateProduct\",\"mlog.51ping.com/adlog\",\"clcadlog.meituan.com/adlog\"],\"close_knb_sign\":0,\"header_white_host\":[],\"init_black_host\":[],\"init_black_url\":[],\"init_white_host\":[],\"init_white_url\":[],\"package_info\":{\"min\":\"4.0.0\",\"url\":\"https://msp.meituan.net/h5guard-files/package-1.1.2.js\",\"url_backup\":\"https://msp-backup.meituan.net/h5guard-files/package-1.1.2.js\",\"ver\":\"1.1.2\"},\"swim_black_host\":[\"ebooking.meituan.com\",\"eb.hotel.test.sankuai.com\",\"eb.vip.sankuai.com\",\"eb.meituan.com\",\"c.qcs.test.sankuai.com\",\"dache.st.meituan.com\",\"dache.meituan.com\"],\"white_host\":[\".dianping.com\",\".meituan.com\",\".sankuai.com\",\".maoyan.com\",\".neixin.cn\",\".51ping.com\",\".baobaoaichi.cn\",\".dper.com\",\".jchunuo.com\"]}"
+        }
+      ]
+    }
+  ]
+}

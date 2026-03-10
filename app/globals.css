@@ -24,3 +24,88 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+.campo-semana{
+  padding:12px 16px;
+  border-radius:12px;
+  border:2px solid #d07fdb;
+  font-size:14px;
+  outline:none;
+  width:200px;
+  transition:0.2s;
+  box-shadow:0 2px 6px rgba(0,0,0,0.1);
+}
+
+.campo-semana:focus{
+  border-color:#df2bff;
+  box-shadow:0 0 0 3px rgba(156,39,176,0.15);
+}
+/* CAMPO SEMANA MODERNO */
+
+.campo-semana-wrapper{
+  position:relative;
+  width:260px;
+}
+
+.react-datepicker-wrapper{
+  width:100%;
+}
+
+.react-datepicker__input-container{
+  width:100%;
+}
+
+.campo-semana{
+  width:100%;
+  padding:12px 16px 12px 42px;
+  border-radius:16px;
+  border:2px solid #c16be3;
+  background:#000;
+  color:#fff;
+  font-size:15px;
+  outline:none;
+}
+
+.icone-semana{
+  position:absolute;
+  left:14px;
+  top:50%;
+  transform:translateY(-50%);
+  color:#c16be3;
+  z-index:20;
+  pointer-events:none;
+}
+/* SELECT DASHBOARD MODERNO */
+
+.select-wrapper{
+  position:relative;
+  width:190px;
+}
+
+/* INPUTS DE USUÁRIO E SENHA */
+input[type="text"],
+input[type="password"] {
+  border: 2px solid #fff; /* borda branca */
+  color: #fff;            /* texto branco */
+  background: #000;       /* mantém fundo preto */
+}
+
+/* BORDA EXTERNA DO SELECT */
+.select-wrapper {
+  position: relative; /* necessário para a seta posicionar corretamente */
+  border: 2px solid #fff; /* borda branca */
+  border-radius: 16px;     /* mantém o arredondado */
+}
+
+/* MANTER O RESTO DO SELECT IGUAL */
+.select-wrapper select.select-moderno {
+  border: none; /* remove a borda interna do select */
+  background: transparent; /* mantém fundo transparente dentro da wrapper */
+  color: #fff;
+  width: 100%;
+  padding: 12px 42px 12px 16px;
+  font-size: 14px;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+}
