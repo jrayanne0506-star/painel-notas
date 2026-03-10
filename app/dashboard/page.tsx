@@ -58,7 +58,6 @@ export default function Painel() {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(pendentes.map((n: any) => ({
               id: n.id,
-              nome: n.nome,
               link: n.link,
               valorEsperado: n.valor,
             }))),

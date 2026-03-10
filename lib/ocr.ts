@@ -6,35 +6,24 @@ async function baixarArquivo(link: string): Promise<{ buffer: Buffer; contentTyp
 
   const fileId = idMatch[1]
   const url = `https://drive.google.com/uc?export=download&id=${fileId}`
-  const res = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0" }, redirect: "follow" })
+  const res = await fetch(url)
   if (!res.ok) throw new Error("Não foi possível baixar o arquivo")
 
   let buffer = Buffer.from(await res.arrayBuffer())
   let contentType = res.headers.get("content-type") ?? ""
 
-  const primeiros = buffer.slice(0, 300).toString("utf-8")
+  // Se o Drive retornou HTML (página de confirmação de vírus), tenta com confirm token
+  const primeiros = buffer.slice(0, 200).toString("utf-8")
   if (contentType.includes("text/html") || primeiros.includes("<!DOC") || primeiros.includes("<html")) {
     const html = buffer.toString("utf-8")
-    const tokenMatch =
-      html.match(/confirm=([a-zA-Z0-9_-]+)/) ||
-      html.match(/name="confirm"\s+value="([^"]+)"/) ||
-      html.match(/"confirm":"([^"]+)"/)
+    const tokenMatch = html.match(/confirm=([a-zA-Z0-9_-]+)/) ||
+                       html.match(/name="confirm"\s+value="([^"]+)"/)
     const token = tokenMatch ? tokenMatch[1] : "t"
     const urlConfirm = `https://drive.google.com/uc?export=download&id=${fileId}&confirm=${token}`
-    const res2 = await fetch(urlConfirm, { headers: { "User-Agent": "Mozilla/5.0" }, redirect: "follow" })
+    const res2 = await fetch(urlConfirm)
     if (!res2.ok) throw new Error("Falha no download com confirmação")
     buffer = Buffer.from(await res2.arrayBuffer())
     contentType = res2.headers.get("content-type") ?? ""
-
-    const primeiros2 = buffer.slice(0, 100).toString("utf-8")
-    if (contentType.includes("text/html") || primeiros2.includes("<!DOC")) {
-      const urlAlt = `https://drive.usercontent.google.com/download?id=${fileId}&export=download&confirm=t`
-      const res3 = await fetch(urlAlt, { headers: { "User-Agent": "Mozilla/5.0" }, redirect: "follow" })
-      if (res3.ok) {
-        buffer = Buffer.from(await res3.arrayBuffer())
-        contentType = res3.headers.get("content-type") ?? ""
-      }
-    }
   }
 
   return { buffer, contentType }
@@ -49,104 +38,62 @@ function detectarTipo(buffer: Buffer, contentType: string): "pdf" | "image" | "u
   return "unknown"
 }
 
-async function lerComGemini(buffer: Buffer, tipo: "pdf" | "image", valorEsperado: string): Promise<{
-  numeroNfse: string
-  statusValidacao: string
-  valorDetectado: string
-}> {
-  const apiKey = process.env.GEMINI_API_KEY
-  if (!apiKey) throw new Error("GEMINI_API_KEY não configurada")
+async function extrairTextoViaVision(buffer: Buffer, tipo: "pdf" | "image"): Promise<string> {
+  const privateKey = (process.env.GOOGLE_PRIVATE_KEY ?? "").replace(/\\n/g, "\n")
+  const clientEmail = process.env.GOOGLE_CLIENT_EMAIL ?? ""
 
-  const base64 = buffer.toString("base64")
-  const mimeType = tipo === "pdf" ? "application/pdf" : "image/jpeg"
+  const header = Buffer.from(JSON.stringify({ alg: "RS256", typ: "JWT" })).toString("base64url")
+  const now = Math.floor(Date.now() / 1000)
+  const payload = Buffer.from(JSON.stringify({
+    iss: clientEmail,
+    scope: "https://www.googleapis.com/auth/cloud-platform",
+    aud: "https://oauth2.googleapis.com/token",
+    exp: now + 3600,
+    iat: now,
+  })).toString("base64url")
 
-  const prompt = `Você está analisando um documento fiscal brasileiro (NFS-e ou nota fiscal).
+  const { createSign } = await import("crypto")
+  const sign = createSign("RSA-SHA256")
+  sign.update(`${header}.${payload}`)
+  const signature = sign.sign(privateKey, "base64url")
+  const jwt = `${header}.${payload}.${signature}`
 
-Extraia as seguintes informações:
-1. Número da NFS-e (campo "Número da NFS-e" ou similar)
-2. Valor Líquido da NFS-e (campo "Valor Líquido da NFS-e" ou "Valor Total")
-3. Se o CNPJ "61.895.820/0001-83" (Scorpions Delivery) aparece no documento como TOMADOR DO SERVIÇO
+  const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: `grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Ajwt-bearer&assertion=${jwt}`,
+  })
+  const tokenData = await tokenRes.json() as any
+  const accessToken = tokenData.access_token
+  if (!accessToken) throw new Error("Falha ao obter token da Vision API")
 
-Responda APENAS em JSON, sem nenhum texto adicional, neste formato exato:
-{
-  "numeroNfse": "número aqui ou null se não encontrado",
-  "valorLiquido": "valor aqui sem R$ (ex: 103,20) ou null se não encontrado",
-  "temCnpjScorpions": true ou false
-}
+  const base64Content = buffer.toString("base64")
 
-Valor esperado para comparação: ${valorEsperado}`
-
-  const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-8b:generateContent?key=${apiKey}`,
-    {
+  if (tipo === "pdf") {
+    const visionRes = await fetch("https://vision.googleapis.com/v1/files:annotate", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
       body: JSON.stringify({
-        contents: [
-          {
-            parts: [
-              {
-                inline_data: {
-                  mime_type: mimeType,
-                  data: base64,
-                },
-              },
-              {
-                text: prompt,
-              },
-            ],
-          },
-        ],
-        generationConfig: {
-          temperature: 0,
-          maxOutputTokens: 300,
-        },
+        requests: [{
+          inputConfig: { content: base64Content, mimeType: "application/pdf" },
+          features: [{ type: "DOCUMENT_TEXT_DETECTION" }],
+          pages: [1, 2, 3],
+        }]
       }),
-    }
-  )
-
-  const data = await response.json() as any
-
-  if (data.error) {
-    console.error("Gemini API error:", JSON.stringify(data.error))
-    throw new Error(`Gemini API: ${data.error.message}`)
-  }
-
-  const texto = data.candidates?.[0]?.content?.parts?.[0]?.text ?? ""
-  console.log(`Gemini resposta: ${texto}`)
-
-  let parsed: any = {}
-  try {
-    const jsonMatch = texto.match(/\{[\s\S]*\}/)
-    if (jsonMatch) parsed = JSON.parse(jsonMatch[0])
-  } catch (e) {
-    console.error("Erro ao parsear resposta Gemini:", texto)
-    throw new Error("Resposta inválida do Gemini")
-  }
-
-  const { numeroNfse, valorLiquido, temCnpjScorpions } = parsed
-
-  if (!temCnpjScorpions) {
-    console.log("CNPJ Scorpions não encontrado pelo Gemini")
-    return { numeroNfse: "—", statusValidacao: "NÃO É NOTA", valorDetectado: "—" }
-  }
-
-  const numFinal = numeroNfse ?? "não encontrado"
-  const valorFinal = valorLiquido ?? "não encontrado"
-
-  const normalizar = (v: string) => String(v).replace(/\./g, "").replace(",", ".").trim()
-  const statusValidacao =
-    valorFinal !== "não encontrado" && valorFinal !== null &&
-    normalizar(String(valorFinal)) === normalizar(valorEsperado)
-      ? "VALIDADO"
-      : "DIVERGENTE"
-
-  console.log(`NFS-e=${numFinal} valor=${valorFinal} esperado=${valorEsperado} status=${statusValidacao}`)
-
-  return {
-    numeroNfse: String(numFinal),
-    statusValidacao,
-    valorDetectado: String(valorFinal),
+    })
+    const visionData = await visionRes.json() as any
+    const responses = visionData.responses?.[0]?.responses ?? []
+    return responses.map((r: any) => r.fullTextAnnotation?.text ?? "").join("\n")
+  } else {
+    const visionRes = await fetch("https://vision.googleapis.com/v1/images:annotate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
+      body: JSON.stringify({
+        requests: [{ image: { content: base64Content }, features: [{ type: "DOCUMENT_TEXT_DETECTION" }] }]
+      }),
+    })
+    const visionData = await visionRes.json() as any
+    return visionData.responses?.[0]?.fullTextAnnotation?.text ?? ""
   }
 }
 
@@ -154,9 +101,72 @@ export async function lerNotaLocal(link: string, valorEsperado: string) {
   const { buffer, contentType } = await baixarArquivo(link)
   const tipo = detectarTipo(buffer, contentType)
 
-  console.log(`tipo=${tipo} contentType=${contentType} tamanho=${buffer.length}`)
+  if (tipo === "unknown") {
+    throw new Error("Formato não suportado: " + contentType)
+  }
 
-  if (tipo === "unknown") throw new Error("Formato não suportado: " + contentType)
+  const texto = await extrairTextoViaVision(buffer, tipo)
 
-  return await lerComGemini(buffer, tipo, valorEsperado)
+  const textoNormalizado = texto.replace(/\s+/g, " ")
+  const cnpjVariantes = [
+    "61.895.820/0001-83",
+    "61895820000183",
+    "61.895.820/0001 83",
+    "61895820/0001-83",
+  ]
+  const temCnpj = cnpjVariantes.some(v => textoNormalizado.includes(v))
+
+  if (!temCnpj) {
+    return { numeroNfse: "—", statusValidacao: "NÃO É NOTA", valorDetectado: "—" }
+  }
+
+  const linhas = texto.split("\n").map(l => l.trim()).filter(l => l.length > 0)
+  const textoUnico = linhas.join(" ")
+
+  let numeroNfse = "não encontrado"
+  let valorDetectado = "não encontrado"
+
+  const nfseMatch = textoUnico.match(/N[úu]mero\s+da\s+NFS-?e\s+(\d+)/i)
+  if (nfseMatch) {
+    numeroNfse = nfseMatch[1]
+  } else {
+    for (let i = 0; i < linhas.length; i++) {
+      if (/N[úu]mero\s+da\s+NFS-?e/i.test(linhas[i])) {
+        for (let j = i + 1; j < Math.min(i + 5, linhas.length); j++) {
+          const match = linhas[j].match(/^(\d+)$/)
+          if (match) { numeroNfse = match[1]; break }
+        }
+      }
+    }
+  }
+
+  const valorMatch = textoUnico.match(/Valor\s+L[íi]quido\s+da\s+NFS-?e\s+R\$\s*([\d.,]+)/i)
+  if (valorMatch) {
+    valorDetectado = valorMatch[1].trim()
+  } else {
+    for (let i = 0; i < linhas.length; i++) {
+      if (/Valor\s+L[íi]quido\s+da\s+NFS-?e/i.test(linhas[i])) {
+        for (let j = i + 1; j < Math.min(i + 5, linhas.length); j++) {
+          const match = linhas[j].match(/R\$\s*([\d.,]+)/)
+          if (match) { valorDetectado = match[1].trim(); break }
+        }
+      }
+    }
+  }
+
+  if (valorDetectado === "não encontrado") {
+    const matches = [...textoUnico.matchAll(/R\$\s*([\d.,]+)/gi)]
+    if (matches.length > 0) {
+      valorDetectado = matches[matches.length - 1][1].trim()
+    }
+  }
+
+  const normalizar = (v: string) => v.replace(/\./g, "").replace(",", ".").trim()
+  const statusValidacao =
+    valorDetectado !== "não encontrado" &&
+    normalizar(valorDetectado) === normalizar(valorEsperado)
+      ? "VALIDADO"
+      : "DIVERGENTE"
+
+  return { numeroNfse, statusValidacao, valorDetectado }
 }
