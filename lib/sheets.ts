@@ -96,12 +96,19 @@ export async function buscarNotasCruzadas() {
   })
 }
 
-export async function salvarResultadoNoSheets(linhaSheet: number, numeroNfse: string, statusValidacao: string) {
+export async function salvarResultadoNoSheets(
+  linhaSheet: number,
+  numeroNfse: string,
+  statusValidacao: string
+) {
+  console.log(`Salvando linha ${linhaSheet}: NFS-e=${numeroNfse} | Status=${statusValidacao}`)
+
   await sheets.spreadsheets.values.update({
     spreadsheetId: SHEET_NOTAS_ID,
-    range: `G${linhaSheet}:H${linhaSheet}`,
+    range: `Respostas!G${linhaSheet}:H${linhaSheet}`,
     valueInputOption: "RAW",
     requestBody: { values: [[numeroNfse, statusValidacao]] },
   })
+
   invalidarCache()
 }
