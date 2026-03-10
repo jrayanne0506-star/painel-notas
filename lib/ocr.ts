@@ -33,7 +33,8 @@ export async function lerNotaLocal(link: string, valorEsperado: string) {
     return { numeroNfse: "—", statusValidacao: "NÃO É NOTA", valorDetectado: "—" }
   }
 
-  const temCnpj = ["61.895.820/0001-83", "61895820000183", "61.895.820/0001 83"].some(v => texto.includes(v))
+  console.log("TEXTO BRUTO:", texto.slice(0, 500))
+const temCnpj = ["61.895.820/0001-83", "61895820000183", "61.895.820/0001 83"].some(v => texto.includes(v))
   if (!temCnpj) {
     return { numeroNfse: "—", statusValidacao: "NÃO É NOTA", valorDetectado: "—" }
   }
