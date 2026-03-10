@@ -1,7 +1,5 @@
 import fetch from "node-fetch"
 
-const CNPJ_SCORPIONS = "61.895.820/0001-83"
-
 async function baixarArquivo(link: string): Promise<{ buffer: Buffer; contentType: string }> {
   const idMatch = link.match(/\/d\/([a-zA-Z0-9_-]+)/)
   if (!idMatch) throw new Error("Link inválido")
@@ -11,8 +9,23 @@ async function baixarArquivo(link: string): Promise<{ buffer: Buffer; contentTyp
   const res = await fetch(url)
   if (!res.ok) throw new Error("Não foi possível baixar o arquivo")
 
-  const buffer = Buffer.from(await res.arrayBuffer())
-  const contentType = res.headers.get("content-type") ?? ""
+  let buffer = Buffer.from(await res.arrayBuffer())
+  let contentType = res.headers.get("content-type") ?? ""
+
+  // Se o Drive retornou HTML (página de confirmação de vírus), tenta com confirm token
+  const primeiros = buffer.slice(0, 200).toString("utf-8")
+  if (contentType.includes("text/html") || primeiros.includes("<!DOC") || primeiros.includes("<html")) {
+    const html = buffer.toString("utf-8")
+    const tokenMatch = html.match(/confirm=([a-zA-Z0-9_-]+)/) ||
+                       html.match(/name="confirm"\s+value="([^"]+)"/)
+    const token = tokenMatch ? tokenMatch[1] : "t"
+    const urlConfirm = `https://drive.google.com/uc?export=download&id=${fileId}&confirm=${token}`
+    const res2 = await fetch(urlConfirm)
+    if (!res2.ok) throw new Error("Falha no download com confirmação")
+    buffer = Buffer.from(await res2.arrayBuffer())
+    contentType = res2.headers.get("content-type") ?? ""
+  }
+
   return { buffer, contentType }
 }
 
@@ -29,7 +42,6 @@ async function extrairTextoViaVision(buffer: Buffer, tipo: "pdf" | "image"): Pro
   const privateKey = (process.env.GOOGLE_PRIVATE_KEY ?? "").replace(/\\n/g, "\n")
   const clientEmail = process.env.GOOGLE_CLIENT_EMAIL ?? ""
 
-  // Gera JWT para autenticar na Vision API
   const header = Buffer.from(JSON.stringify({ alg: "RS256", typ: "JWT" })).toString("base64url")
   const now = Math.floor(Date.now() / 1000)
   const payload = Buffer.from(JSON.stringify({
@@ -46,7 +58,6 @@ async function extrairTextoViaVision(buffer: Buffer, tipo: "pdf" | "image"): Pro
   const signature = sign.sign(privateKey, "base64url")
   const jwt = `${header}.${payload}.${signature}`
 
-  // Troca JWT por access token
   const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -58,56 +69,29 @@ async function extrairTextoViaVision(buffer: Buffer, tipo: "pdf" | "image"): Pro
 
   const base64Content = buffer.toString("base64")
 
-  let requestBody: any
-
   if (tipo === "pdf") {
-    // Para PDF usa document text detection
-    requestBody = {
-      requests: [{
-        inputConfig: {
-          content: base64Content,
-          mimeType: "application/pdf",
-        },
-        features: [{ type: "DOCUMENT_TEXT_DETECTION" }],
-        pages: [1, 2, 3],
-      }]
-    }
-
-    const visionRes = await fetch(
-      "https://vision.googleapis.com/v1/files:annotate",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${accessToken}`,
-        },
-        body: JSON.stringify(requestBody),
-      }
-    )
+    const visionRes = await fetch("https://vision.googleapis.com/v1/files:annotate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
+      body: JSON.stringify({
+        requests: [{
+          inputConfig: { content: base64Content, mimeType: "application/pdf" },
+          features: [{ type: "DOCUMENT_TEXT_DETECTION" }],
+          pages: [1, 2, 3],
+        }]
+      }),
+    })
     const visionData = await visionRes.json() as any
     const responses = visionData.responses?.[0]?.responses ?? []
     return responses.map((r: any) => r.fullTextAnnotation?.text ?? "").join("\n")
-
   } else {
-    // Para imagem usa image text detection
-    requestBody = {
-      requests: [{
-        image: { content: base64Content },
-        features: [{ type: "DOCUMENT_TEXT_DETECTION" }],
-      }]
-    }
-
-    const visionRes = await fetch(
-      "https://vision.googleapis.com/v1/images:annotate",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${accessToken}`,
-        },
-        body: JSON.stringify(requestBody),
-      }
-    )
+    const visionRes = await fetch("https://vision.googleapis.com/v1/images:annotate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
+      body: JSON.stringify({
+        requests: [{ image: { content: base64Content }, features: [{ type: "DOCUMENT_TEXT_DETECTION" }] }]
+      }),
+    })
     const visionData = await visionRes.json() as any
     return visionData.responses?.[0]?.fullTextAnnotation?.text ?? ""
   }
@@ -123,7 +107,6 @@ export async function lerNotaLocal(link: string, valorEsperado: string) {
 
   const texto = await extrairTextoViaVision(buffer, tipo)
 
-  // Normaliza o texto removendo espaços extras para busca do CNPJ
   const textoNormalizado = texto.replace(/\s+/g, " ")
   const cnpjVariantes = [
     "61.895.820/0001-83",
@@ -138,18 +121,15 @@ export async function lerNotaLocal(link: string, valorEsperado: string) {
   }
 
   const linhas = texto.split("\n").map(l => l.trim()).filter(l => l.length > 0)
-  // Texto colado em uma linha só para regex mais amplos
   const textoUnico = linhas.join(" ")
 
   let numeroNfse = "não encontrado"
   let valorDetectado = "não encontrado"
 
-  // Busca número da NFS-e no texto contínuo
   const nfseMatch = textoUnico.match(/N[úu]mero\s+da\s+NFS-?e\s+(\d+)/i)
   if (nfseMatch) {
     numeroNfse = nfseMatch[1]
   } else {
-    // Fallback: busca linha a linha
     for (let i = 0; i < linhas.length; i++) {
       if (/N[úu]mero\s+da\s+NFS-?e/i.test(linhas[i])) {
         for (let j = i + 1; j < Math.min(i + 5, linhas.length); j++) {
@@ -160,12 +140,10 @@ export async function lerNotaLocal(link: string, valorEsperado: string) {
     }
   }
 
-  // Busca valor líquido no texto contínuo
   const valorMatch = textoUnico.match(/Valor\s+L[íi]quido\s+da\s+NFS-?e\s+R\$\s*([\d.,]+)/i)
   if (valorMatch) {
     valorDetectado = valorMatch[1].trim()
   } else {
-    // Fallback: busca linha a linha
     for (let i = 0; i < linhas.length; i++) {
       if (/Valor\s+L[íi]quido\s+da\s+NFS-?e/i.test(linhas[i])) {
         for (let j = i + 1; j < Math.min(i + 5, linhas.length); j++) {
@@ -176,7 +154,6 @@ export async function lerNotaLocal(link: string, valorEsperado: string) {
     }
   }
 
-  // Se ainda não achou, tenta pegar qualquer R$ perto do final do documento
   if (valorDetectado === "não encontrado") {
     const matches = [...textoUnico.matchAll(/R\$\s*([\d.,]+)/gi)]
     if (matches.length > 0) {
