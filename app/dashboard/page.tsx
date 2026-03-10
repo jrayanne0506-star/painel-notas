@@ -9,7 +9,7 @@ import {
   ResponsiveContainer,
   CartesianGrid,
 } from "recharts"
-import { Users, CheckCircle, AlertCircle, DollarSign, LogOut, Search, X, Download, Save, BarChart2 } from "lucide-react"
+import { Users, CheckCircle, AlertCircle, DollarSign, LogOut, Search, X, Download, Save, BarChart2, RefreshCw } from "lucide-react"
 import { useEffect, useState } from "react"
 import DatePicker from "react-datepicker"
 import "react-datepicker/dist/react-datepicker.css"
@@ -27,6 +27,7 @@ export default function Painel() {
   const [processando, setProcessando] = useState(false)
   const [progressoTexto, setProgressoTexto] = useState("")
   const [salvando, setSalvando] = useState(false)
+  const [sincronizando, setSincronizando] = useState(false)
   const [avisoFechado, setAvisoFechado] = useState(false)
   const [msgSalvar, setMsgSalvar] = useState("")
   const [modalSalvar, setModalSalvar] = useState(false)
@@ -86,6 +87,91 @@ export default function Painel() {
       .then(data => { if (data.semanas) setSemanas(data.semanas) })
       .catch(() => {})
   }, [])
+
+  async function sincronizar() {
+    setSincronizando(true)
+    setProcessando(true)
+    setProgressoTexto("Sincronizando dados da planilha...")
+    setMsgSalvar("")
+
+    try {
+      // 1️⃣ Recarrega as notas da planilha (com cache bust)
+      const timestamp = Date.now()
+      const resNotas = await fetch(`/api/notas?t=${timestamp}`, {
+        method: "GET",
+        cache: "no-store",
+        headers: { 
+          "Cache-Control": "no-cache, no-store, must-revalidate",
+          "Pragma": "no-cache"
+        }
+      })
+      
+      if (!resNotas.ok) throw new Error("Erro ao buscar notas")
+      
+      const listaAtualizada = await resNotas.json()
+      const novasNotas = Array.isArray(listaAtualizada) ? listaAtualizada : []
+      
+      console.log("✓ Notas sincronizadas da planilha:", novasNotas.length, "registros")
+      setDados(novasNotas)
+
+      // 2️⃣ Identifica as pendentes
+      const pendentes = novasNotas.filter((n: any) =>
+        n.link && (!n.numeroNfse || n.numeroNfse === "" || n.numeroNfse === "NÃO ENCONTRADO" || n.numeroNfse === "ERRO" || !n.statusValidacao || n.statusValidacao === "")
+      )
+
+      console.log("⏳ Notas pendentes para processar:", pendentes.length)
+
+      // 3️⃣ Se houver pendentes, processa elas
+      if (pendentes.length > 0) {
+        setProgressoTexto(`Processando ${pendentes.length} nota(s)...`)
+
+        const resProcessar = await fetch("/api/processar-todas-notas", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(pendentes.map((n: any) => ({
+            id: n.id,
+            link: n.link,
+            valorEsperado: n.valor,
+          }))),
+        })
+
+        if (!resProcessar.ok) throw new Error("Erro ao processar notas")
+
+        const resultados = await resProcessar.json()
+        console.log("✓ Notas processadas:", resultados.length)
+        
+        if (Array.isArray(resultados)) {
+          // 4️⃣ Atualiza os dados com os resultados
+          setDados(prev => prev.map((item: any) => {
+            const r = resultados.find((x: any) => String(x.id) === String(item.id))
+            if (!r || r.erro) {
+              console.warn(`⚠️ Erro ao processar nota ${item.id}:`, r?.erro)
+              return item
+            }
+            console.log(`✓ Nota ${item.id} processada: ${r.numeroNfse}`)
+            return { 
+              ...item, 
+              numeroNfse: r.numeroNfse || "não encontrado", 
+              statusValidacao: r.statusValidacao || "NÃO É NOTA",
+              valorDetectado: r.valorDetectado
+            }
+          }))
+        }
+      } else {
+        console.log("✓ Nenhuma nota pendente para processar")
+      }
+
+      setMsgSalvar("✓ Sincronização concluída com sucesso!")
+    } catch (e: any) {
+      console.error("❌ Erro ao sincronizar:", e.message)
+      setMsgSalvar(`✗ Erro: ${e.message}`)
+    } finally {
+      setSincronizando(false)
+      setProcessando(false)
+      setProgressoTexto("")
+      setTimeout(() => setMsgSalvar(""), 5000)
+    }
+  }
 
   async function salvarSemana() {
     if (!periodoSalvar[0] || !periodoSalvar[1]) return
@@ -336,6 +422,43 @@ export default function Painel() {
         }
 
         .btn-salvar:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        .btn-sincronizar {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          padding: 9px 18px;
+          border-radius: 8px;
+          border: 1px solid rgba(100,181,246,0.25);
+          background: rgba(100,181,246,0.08);
+          color: #90caf9;
+          font-family: 'DM Sans', sans-serif;
+          font-size: 13px;
+          font-weight: 600;
+          cursor: pointer;
+          transition: all 0.2s;
+          white-space: nowrap;
+        }
+
+        .btn-sincronizar:hover:not(:disabled) {
+          background: rgba(100,181,246,0.15);
+          border-color: rgba(100,181,246,0.4);
+          transform: translateY(-1px);
+        }
+
+        .btn-sincronizar:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
+        }
+
+        @keyframes syncRotate {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+
+        .btn-sincronizar.sincronizando svg {
+          animation: syncRotate 1s linear infinite;
+        }
 
         .msg-salvar {
           font-size: 12px;
@@ -882,6 +1005,15 @@ export default function Painel() {
                 {msgSalvar}
               </span>
             )}
+            <button 
+              className={`btn-sincronizar ${sincronizando ? "sincronizando" : ""}`}
+              onClick={sincronizar} 
+              disabled={sincronizando || processando}
+              title="Sincronizar dados da planilha e processar notas"
+            >
+              <RefreshCw size={14} />
+              {sincronizando ? "Sincronizando..." : "Sincronizar"}
+            </button>
             <button className="btn-salvar" onClick={() => setModalSalvar(true)} disabled={salvando}>
               <Save size={14} />
               {salvando ? "Salvando..." : "Salvar Semana"}
