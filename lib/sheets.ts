@@ -1,30 +1,25 @@
 import { sheets, SHEET_ENTREGADORES_ID, SHEET_NOTAS_ID } from "./googleSheets"
-import fs from "fs"
-import path from "path"
 
-const CACHE_PATH = path.join(process.cwd(), "data", "notas-cache.json")
+// Cache em memória (funciona na Vercel, reseta a cada deploy)
+let memoriaCache: { timestamp: number; dados: any[] } | null = null
 const CACHE_TTL = 5 * 60 * 1000
 
 export function lerCache() {
   try {
-    if (!fs.existsSync(CACHE_PATH)) return null
-    const raw = JSON.parse(fs.readFileSync(CACHE_PATH, "utf-8"))
-    if (Date.now() - raw.timestamp > CACHE_TTL) return null
-    return raw.dados
+    if (!memoriaCache) return null
+    if (Date.now() - memoriaCache.timestamp > CACHE_TTL) return null
+    return memoriaCache.dados
   } catch {
     return null
   }
 }
 
 export function salvarCache(dados: any[]) {
-  fs.mkdirSync(path.dirname(CACHE_PATH), { recursive: true })
-  fs.writeFileSync(CACHE_PATH, JSON.stringify({ timestamp: Date.now(), dados }, null, 2))
+  memoriaCache = { timestamp: Date.now(), dados }
 }
 
 export function invalidarCache() {
-  try {
-    fs.unlinkSync(CACHE_PATH)
-  } catch {}
+  memoriaCache = null
 }
 
 export async function buscarNotasCruzadas() {
