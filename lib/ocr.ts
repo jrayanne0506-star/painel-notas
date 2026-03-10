@@ -31,24 +31,53 @@ async function extrairTextoPDF(buffer: Buffer): Promise<string> {
 }
 
 export async function lerNotaLocal(link: string, valorEsperado: string) {
-  const buffer = await baixarArquivo(link)
+  console.log("\n====== INICIANDO PROCESSAMENTO ======")
+  console.log("Link:", link)
+  console.log("Valor esperado:", valorEsperado)
+  
+  let buffer: Buffer
+  try {
+    buffer = await baixarArquivo(link)
+    console.log("✓ PDF BAIXADO - Tamanho:", buffer.length, "bytes")
+  } catch (err) {
+    console.error("❌ ERRO AO BAIXAR PDF:", err)
+    return { numeroNfse: "—", statusValidacao: "NÃO É NOTA", valorDetectado: "—" }
+  }
 
   let texto = ""
   try {
     texto = await extrairTextoPDF(buffer)
-    console.log("✓ TEXTO EXTRAÍDO COM SUCESSO - Primeiros 300 chars:", texto.slice(0, 300))
+    console.log("✓ TEXTO EXTRAÍDO - Tamanho:", texto.length, "caracteres")
+    console.log("✓ Primeiros 500 chars:", texto.slice(0, 500))
+    console.log("✓ Últimos 500 chars:", texto.slice(-500))
   } catch (err) {
-    console.error("❌ Erro extração PDF:", err)
-  }
-
-  if (!texto || texto.trim().length === 0) {
-    console.error("❌ Texto vazio após extração do PDF")
+    console.error("❌ ERRO NA EXTRAÇÃO PDF:", err)
     return { numeroNfse: "—", statusValidacao: "NÃO É NOTA", valorDetectado: "—" }
   }
 
-  const temCnpj = ["61.895.820/0001-83", "61895820000183", "61.895.820/0001 83"].some(v => texto.includes(v))
+  if (!texto || texto.trim().length === 0) {
+    console.error("❌ TEXTO VAZIO após extração do PDF")
+    return { numeroNfse: "—", statusValidacao: "NÃO É NOTA", valorDetectado: "—" }
+  }
+
+  // DEBUG: Teste cada CNPJ individualmente
+  const cnpjsParaTester = ["61.895.820/0001-83", "61895820000183", "61.895.820/0001 83"]
+  console.log("\n--- TESTANDO CNPJ ---")
+  cnpjsParaTester.forEach(cnpj => {
+    const existe = texto.includes(cnpj)
+    console.log(`  "${cnpj}" → ${existe ? "✓ ENCONTRADO" : "❌ NÃO ENCONTRADO"}`)
+  })
+
+  const temCnpj = cnpjsParaTester.some(v => texto.includes(v))
   if (!temCnpj) {
-    console.log("❌ CNPJ da Scorpions não encontrado - provavelmente não é uma NFS-e")
+    console.log("❌ NENHUM CNPJ DA SCORPIONS ENCONTRADO")
+    console.log("📋 Procurando por qualquer CNPJ no documento...")
+    const cnpjsEncontrados = texto.match(/\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}/g)
+    if (cnpjsEncontrados) {
+      console.log("   CNPJs encontrados:", cnpjsEncontrados)
+    } else {
+      console.log("   Nenhum CNPJ encontrado no formato esperado")
+    }
     return { numeroNfse: "—", statusValidacao: "NÃO É NOTA", valorDetectado: "—" }
   }
 
