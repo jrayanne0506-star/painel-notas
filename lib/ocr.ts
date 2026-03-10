@@ -1,26 +1,28 @@
 import fetch from "node-fetch"
 
-export async function lerNotaLocal(link: string, valorEsperado: string) {
+async function baixarArquivo(link: string): Promise<Buffer> {
   const idMatch = link.match(/\/d\/([a-zA-Z0-9_-]+)/)
   if (!idMatch) throw new Error("Link inválido")
   const fileId = idMatch[1]
-
-  const url = `https://drive.google.com/uc?export=download&id=${fileId}`
-  let res = await fetch(url)
+  let res = await fetch(`https://drive.google.com/uc?export=download&id=${fileId}`)
   let buffer = Buffer.from(await res.arrayBuffer())
   const primeiros = buffer.slice(0, 200).toString("utf-8")
-
   if (primeiros.includes("<!DOC") || primeiros.includes("<html")) {
     const html = buffer.toString("utf-8")
-    const tokenMatch = html.match(/confirm=([a-zA-Z0-9_-]+)/)
-    const token = tokenMatch ? tokenMatch[1] : "t"
-    res = await fetch(`https://drive.google.com/uc?export=download&id=${fileId}&confirm=${token}`)
+    const t = html.match(/confirm=([a-zA-Z0-9_-]+)/)?.[1] ?? "t"
+    res = await fetch(`https://drive.google.com/uc?export=download&id=${fileId}&confirm=${t}`)
     buffer = Buffer.from(await res.arrayBuffer())
   }
+  return buffer
+}
+
+export async function lerNotaLocal(link: string, valorEsperado: string) {
+  const buffer = await baixarArquivo(link)
 
   let texto = ""
   try {
-    const { default: pdfParse } = await import("pdf-parse")
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const pdfParse = require("pdf-parse")
     const data = await pdfParse(buffer)
     texto = data.text || ""
   } catch (err) {
@@ -31,12 +33,12 @@ export async function lerNotaLocal(link: string, valorEsperado: string) {
     return { numeroNfse: "—", statusValidacao: "NÃO É NOTA", valorDetectado: "—" }
   }
 
-  const temCnpj = ["61.895.820/0001-83","61895820000183","61.895.820/0001 83"].some(v => texto.includes(v))
+  const temCnpj = ["61.895.820/0001-83", "61895820000183", "61.895.820/0001 83"].some(v => texto.includes(v))
   if (!temCnpj) {
     return { numeroNfse: "—", statusValidacao: "NÃO É NOTA", valorDetectado: "—" }
   }
 
-  const linhas = texto.split("\n").map(l => l.trim()).filter(Boolean)
+  const linhas = texto.split("\n").map((l: string) => l.trim()).filter(Boolean)
   const textoUnico = linhas.join(" ")
 
   let numeroNfse = "não encontrado"
