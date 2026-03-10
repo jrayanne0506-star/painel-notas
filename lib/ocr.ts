@@ -1,4 +1,5 @@
-import fetch from "node-fetch"
+import fetch from "node-fetch";
+import pdf from "pdf-parse";
 
 async function baixarArquivo(link: string): Promise<{ buffer: Buffer; contentType: string }> {
   const idMatch = link.match(/\/d\/([a-zA-Z0-9_-]+)/)
@@ -38,19 +39,21 @@ function detectarTipo(buffer: Buffer, contentType: string): "pdf" | "image" | "u
   return "unknown"
 }
 
-async function extrairTextoViaVision(buffer: Buffer, tipo: "pdf" | "image"): Promise<string> {
-  const privateKey = (process.env.GOOGLE_PRIVATE_KEY ?? "").replace(/\\n/g, "\n")
-  const clientEmail = process.env.GOOGLE_CLIENT_EMAIL ?? ""
-
-  const header = Buffer.from(JSON.stringify({ alg: "RS256", typ: "JWT" })).toString("base64url")
-  const now = Math.floor(Date.now() / 1000)
-  const payload = Buffer.from(JSON.stringify({
-    iss: clientEmail,
-    scope: "https://www.googleapis.com/auth/cloud-platform",
-    aud: "https://oauth2.googleapis.com/token",
-    exp: now + 3600,
-    iat: now,
-  })).toString("base64url")
+async function extrairTexto(buffer: Buffer, tipo: "pdf" | "image"): Promise<string> {
+  if (tipo === "pdf") {
+    try {
+      // O pdf-parse lê o buffer e extrai todo o texto digital do PDF
+      const data = await pdf(buffer);
+      return data.text;
+    } catch (error) {
+      console.error("Erro no pdf-parse:", error);
+      throw new Error("Falha ao ler o texto do PDF.");
+    }
+  } else {
+    // Como o pdf-parse só lê PDF, vamos retornar um erro amigável se for imagem por enquanto
+    throw new Error("O sistema atual está configurado apenas para ler arquivos PDF. Imagens não suportadas no momento.");
+  }
+}
 
   const { createSign } = await import("crypto")
   const sign = createSign("RSA-SHA256")
@@ -105,7 +108,7 @@ export async function lerNotaLocal(link: string, valorEsperado: string) {
     throw new Error("Formato não suportado: " + contentType)
   }
 
-  const texto = await extrairTextoViaVision(buffer, tipo)
+  const texto = await extrairTexto(buffer, tipo)
 
   const textoNormalizado = texto.replace(/\s+/g, " ")
   const cnpjVariantes = [
