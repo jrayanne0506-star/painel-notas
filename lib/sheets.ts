@@ -37,7 +37,7 @@ export async function buscarNotasCruzadas() {
   })
   const rowsNotas = resNotas.data.values ?? []
 
-  // Aba Base_Entregadores - telefones de todos os riders (col C=Nome, D=Telefone)
+  // Aba Base_Entregadores - telefones (col C=Nome, D=Telefone)
   const mapaKeetaTelefone: Record<string, string> = {}
   try {
     const resBase = await sheets.spreadsheets.values.get({
@@ -55,12 +55,20 @@ export async function buscarNotasCruzadas() {
   }
 
   // Monta mapa de quem JÁ enviou nota (pelo nome)
+  // IMPORTANTE: guarda TODOS os registros por nome (pode haver mais de um envio do mesmo nome)
+  // Usamos um array por nome e pegamos o mais recente (último)
   const mapaNotas: Record<string, any> = {}
   rowsNotas.slice(1).forEach((row: any, i: number) => {
     const nome = (row[1] ?? "").toString().trim().toLowerCase()
-    if (nome) {
+    if (!nome) return
+
+    const linhaSheet = i + 2 // linha real na planilha (começa em 2 por causa do cabeçalho)
+    
+    // Se já existe entrada para esse nome, mantém a mais recente (maior linha)
+    const existente = mapaNotas[nome]
+    if (!existente || linhaSheet > Number(existente.id)) {
       mapaNotas[nome] = {
-        id: String(i + 2),
+        id: String(linhaSheet),
         link: row[4] ?? "",
         telefone: row[2] ?? "",
         status: "ENVIADO",
