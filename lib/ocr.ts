@@ -49,16 +49,16 @@ function detectarTipo(buffer: Buffer, contentType: string): "pdf" | "image" | "u
   return "unknown"
 }
 
-async function lerComClaude(buffer: Buffer, tipo: "pdf" | "image", valorEsperado: string): Promise<{
+async function lerComGemini(buffer: Buffer, tipo: "pdf" | "image", valorEsperado: string): Promise<{
   numeroNfse: string
   statusValidacao: string
   valorDetectado: string
 }> {
-  const apiKey = process.env.ANTHROPIC_API_KEY
-  if (!apiKey) throw new Error("ANTHROPIC_API_KEY não configurada")
+  const apiKey = process.env.GEMINI_API_KEY
+  if (!apiKey) throw new Error("GEMINI_API_KEY não configurada")
 
   const base64 = buffer.toString("base64")
-  const mediaType = tipo === "pdf" ? "application/pdf" : "image/jpeg"
+  const mimeType = tipo === "pdf" ? "application/pdf" : "image/jpeg"
 
   const prompt = `Você está analisando um documento fiscal brasileiro (NFS-e ou nota fiscal).
 
@@ -76,61 +76,58 @@ Responda APENAS em JSON, sem nenhum texto adicional, neste formato exato:
 
 Valor esperado para comparação: ${valorEsperado}`
 
-  const response = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-api-key": apiKey,
-      "anthropic-version": "2023-06-01",
-    },
-    body: JSON.stringify({
-      model: "claude-haiku-4-5-20251001",
-      max_tokens: 300,
-      messages: [
-        {
-          role: "user",
-          content: [
-            {
-              type: tipo === "pdf" ? "document" : "image",
-              source: {
-                type: "base64",
-                media_type: mediaType,
-                data: base64,
+  const response = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [
+          {
+            parts: [
+              {
+                inline_data: {
+                  mime_type: mimeType,
+                  data: base64,
+                },
               },
-            },
-            {
-              type: "text",
-              text: prompt,
-            },
-          ],
+              {
+                text: prompt,
+              },
+            ],
+          },
+        ],
+        generationConfig: {
+          temperature: 0,
+          maxOutputTokens: 300,
         },
-      ],
-    }),
-  })
+      }),
+    }
+  )
 
   const data = await response.json() as any
 
   if (data.error) {
-    console.error("Claude API error:", JSON.stringify(data.error))
-    throw new Error(`Claude API: ${data.error.message}`)
+    console.error("Gemini API error:", JSON.stringify(data.error))
+    throw new Error(`Gemini API: ${data.error.message}`)
   }
 
-  const texto = data.content?.[0]?.text ?? ""
-  console.log(`Claude resposta: ${texto}`)
+  const texto = data.candidates?.[0]?.content?.parts?.[0]?.text ?? ""
+  console.log(`Gemini resposta: ${texto}`)
 
   let parsed: any = {}
   try {
     const jsonMatch = texto.match(/\{[\s\S]*\}/)
     if (jsonMatch) parsed = JSON.parse(jsonMatch[0])
   } catch (e) {
-    console.error("Erro ao parsear resposta Claude:", texto)
-    throw new Error("Resposta inválida do Claude")
+    console.error("Erro ao parsear resposta Gemini:", texto)
+    throw new Error("Resposta inválida do Gemini")
   }
 
   const { numeroNfse, valorLiquido, temCnpjScorpions } = parsed
 
   if (!temCnpjScorpions) {
-    console.log("CNPJ Scorpions não encontrado pelo Claude")
+    console.log("CNPJ Scorpions não encontrado pelo Gemini")
     return { numeroNfse: "—", statusValidacao: "NÃO É NOTA", valorDetectado: "—" }
   }
 
@@ -161,5 +158,5 @@ export async function lerNotaLocal(link: string, valorEsperado: string) {
 
   if (tipo === "unknown") throw new Error("Formato não suportado: " + contentType)
 
-  return await lerComClaude(buffer, tipo, valorEsperado)
+  return await lerComGemini(buffer, tipo, valorEsperado)
 }
