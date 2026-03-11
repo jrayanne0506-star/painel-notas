@@ -174,7 +174,7 @@ export async function lerNotaLocal(link: string, valorEsperado: string) {
 
   // ==================== VALIDAÇÃO ====================
   const norm = (v: string) => v.replace(/\./g, "").replace(",", ".").trim()
-  const statusValidacao = norm(valorDetectado) === norm(valorEsperado) ? "✓ VALIDADO" : "⚠️  DIVERGENTE"
+  const statusValidacao = norm(valorDetectado) === norm(valorEsperado) ? "VALIDADO" : "DIVERGENTE"
 
   console.log("\n========== RESULTADO FINAL ==========")
   console.log("Número NFS-e:", numeroNfse)
