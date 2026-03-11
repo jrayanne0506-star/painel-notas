@@ -1,4 +1,5 @@
 import fetch from "node-fetch"
+import PDFParse from 'pdf-parse'
 
 async function baixarArquivo(link: string): Promise<Buffer> {
   const idMatch = link.match(/\/d\/([a-zA-Z0-9_-]+)/)
@@ -17,17 +18,17 @@ async function baixarArquivo(link: string): Promise<Buffer> {
 }
 
 async function extrairTextoPDF(buffer: Buffer): Promise<string> {
-  const pdfjsLib = await import("pdfjs-dist/legacy/build/pdf.mjs")
-  const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(buffer) })
-  const pdf = await loadingTask.promise
-  let textoTotal = ""
-  for (let i = 1; i <= pdf.numPages; i++) {
-    const page = await pdf.getPage(i)
-    const content = await page.getTextContent()
-    const texto = content.items.map((item: any) => item.str).join(" ")
-    textoTotal += texto + "\n"
+  try {
+    const data = await PDFParse(buffer)
+    let textoTotal = ""
+    data.pages.forEach((page: any) => {
+      textoTotal += page.text + "\n"
+    })
+    return textoTotal
+  } catch (err) {
+    console.error("Erro ao parsear PDF:", err)
+    throw err
   }
-  return textoTotal
 }
 
 export async function lerNotaLocal(link: string, valorEsperado: string) {
