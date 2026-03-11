@@ -1,5 +1,5 @@
 import fetch from "node-fetch"
-import PDFParse from 'pdf-parse'
+import * as pdfjsLib from 'pdfjs-dist/build/pdf.js'
 
 async function baixarArquivo(link: string): Promise<Buffer> {
   const idMatch = link.match(/\/d\/([a-zA-Z0-9_-]+)/)
@@ -17,12 +17,20 @@ async function baixarArquivo(link: string): Promise<Buffer> {
   return buffer
 }
 
+if (typeof global !== 'undefined' && !global.pdfjsWorker) {
+  pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`
+}
+
 async function extrairTextoPDF(buffer: Buffer): Promise<string> {
-  const pdf = await PDFParse(buffer)
+  const loadingTask = pdfjsLib.getDocument({ data: buffer })
+  const pdf = await loadingTask.promise
   let textoTotal = ""
-  pdf.pages.forEach((page: any) => {
-    textoTotal += page.text + "\n"
-  })
+  for (let i = 1; i <= pdf.numPages; i++) {
+    const page = await pdf.getPage(i)
+    const content = await page.getTextContent()
+    const texto = content.items.map((item: any) => item.str).join(" ")
+    textoTotal += texto + "\n"
+  }
   return textoTotal
 }
 
