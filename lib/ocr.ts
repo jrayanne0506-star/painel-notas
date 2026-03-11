@@ -18,17 +18,12 @@ async function baixarArquivo(link: string): Promise<Buffer> {
 }
 
 async function extrairTextoPDF(buffer: Buffer): Promise<string> {
-  try {
-    const data = await PDFParse(buffer)
-    let textoTotal = ""
-    data.pages.forEach((page: any) => {
-      textoTotal += page.text + "\n"
-    })
-    return textoTotal
-  } catch (err) {
-    console.error("Erro ao parsear PDF:", err)
-    throw err
-  }
+  const pdf = await PDFParse(buffer)
+  let textoTotal = ""
+  pdf.pages.forEach((page: any) => {
+    textoTotal += page.text + "\n"
+  })
+  return textoTotal
 }
 
 export async function lerNotaLocal(link: string, valorEsperado: string) {
