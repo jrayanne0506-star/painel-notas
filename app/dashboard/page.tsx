@@ -62,6 +62,27 @@ function gerarId() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2)
 }
 
+const CACHE_KEY = "despesas_cache_v2"
+const CACHE_TTL = 2 * 60 * 1000
+
+function invalidarCache() {
+  try { sessionStorage.removeItem(CACHE_KEY) } catch {}
+}
+
+function lerCache(): { despesas: Despesa[]; receitas: Record<string, number> } | null {
+  try {
+    const raw = sessionStorage.getItem(CACHE_KEY)
+    if (!raw) return null
+    const { despesas, receitas, ts } = JSON.parse(raw)
+    if (Date.now() - ts > CACHE_TTL) { sessionStorage.removeItem(CACHE_KEY); return null }
+    return { despesas, receitas }
+  } catch { return null }
+}
+
+function salvarCache(despesas: Despesa[], receitas: Record<string, number>) {
+  try { sessionStorage.setItem(CACHE_KEY, JSON.stringify({ despesas, receitas, ts: Date.now() })) } catch {}
+}
+
 const CATEGORIAS_DEFAULT = [
   "Aluguel", "Salários", "Combustível", "Manutenção",
   "Impostos", "Internet", "Telefone", "Outros"
@@ -88,55 +109,84 @@ export function AbaDespesas() {
   const [inputReceita, setInputReceita] = useState("")
   const [modalNovaSemana, setModalNovaSemana] = useState(false)
   const [novaSemanaInput, setNovaSemanaInput] = useState("")
+  const [atualizando, setAtualizando] = useState(false)
 
-  useEffect(() => {
-    async function carregar() {
-      setCarregando(true)
-      setErroCarregamento("")
-      try {
-        const [rawDesp, rawRec] = await Promise.all([
-          sheetsGet("despesas"),
-          sheetsGet("receitas"),
-        ])
-        if (rawDesp?.erro || rawRec?.erro) {
-          setErroCarregamento(rawDesp?.erro || rawRec?.erro)
-          setCarregando(false)
-          return
-        }
-        const desp: Despesa[] = (Array.isArray(rawDesp) ? rawDesp : [])
-          .map((r: any) => ({
-            id: String(r.id ?? ""),
-            nome: String(r.nome ?? ""),
-            valor: Number(r.valor ?? 0),
-            status: (r.status ?? "PENDENTE") as StatusDespesa,
-            semana: String(r.semana ?? ""),
-            categoria: String(r.categoria ?? ""),
-            criadaEm: String(r.criadaEm ?? new Date().toISOString()),
-          }))
-          .filter(d => d.id && d.semana)
-        const rec: Record<string, number> = {}
-        ;(Array.isArray(rawRec) ? rawRec : []).forEach((r: any) => {
-          if (r.semana) rec[String(r.semana)] = Number(r.valor ?? 0)
-        })
-        setDespesas(desp)
-        setReceitas(rec)
-        const semanasUnicas = Array.from(
-          new Set([semanaAtual(), ...desp.map(x => x.semana)])
-        ).sort().reverse()
-        setSemanas(semanasUnicas)
-        if (semanasUnicas.includes(semanaAtual())) {
-          setSemanaSel(semanaAtual())
-        } else if (semanasUnicas.length > 0) {
-          setSemanaSel(semanasUnicas[0])
-        }
-      } catch (e: any) {
-        setErroCarregamento(e.message || "Erro desconhecido")
-      } finally {
+  function construirSemanas(desp: Despesa[], rec: Record<string, number>) {
+    return Array.from(
+      new Set([semanaAtual(), ...desp.map(x => x.semana), ...Object.keys(rec)])
+    ).sort().reverse()
+  }
+
+  async function carregarDados(forcarFetch = false) {
+    setErroCarregamento("")
+
+    if (!forcarFetch) {
+      const cache = lerCache()
+      if (cache) {
+        setDespesas(cache.despesas)
+        setReceitas(cache.receitas)
+        const s = construirSemanas(cache.despesas, cache.receitas)
+        setSemanas(s)
+        setSemanaSel(s.includes(semanaAtual()) ? semanaAtual() : s[0])
         setCarregando(false)
+        return
       }
     }
-    carregar()
+
+    try {
+      const [rawDesp, rawRec] = await Promise.all([
+        sheetsGet("despesas"),
+        sheetsGet("receitas"),
+      ])
+
+      if (rawDesp?.erro || rawRec?.erro) {
+        setErroCarregamento(rawDesp?.erro || rawRec?.erro)
+        setCarregando(false)
+        setAtualizando(false)
+        return
+      }
+
+      const desp: Despesa[] = (Array.isArray(rawDesp) ? rawDesp : [])
+        .map((r: any) => ({
+          id: String(r.id ?? ""),
+          nome: String(r.nome ?? ""),
+          valor: Number(r.valor ?? 0),
+          status: (r.status ?? "PENDENTE") as StatusDespesa,
+          semana: String(r.semana ?? ""),
+          categoria: String(r.categoria ?? ""),
+          criadaEm: String(r.criadaEm ?? new Date().toISOString()),
+        }))
+        .filter(d => d.id && d.semana)
+
+      const rec: Record<string, number> = {}
+      ;(Array.isArray(rawRec) ? rawRec : []).forEach((r: any) => {
+        if (r.semana) rec[String(r.semana)] = Number(r.valor ?? 0)
+      })
+
+      setDespesas(desp)
+      setReceitas(rec)
+      salvarCache(desp, rec)
+
+      const s = construirSemanas(desp, rec)
+      setSemanas(s)
+      setSemanaSel(prev => s.includes(prev) ? prev : (s.includes(semanaAtual()) ? semanaAtual() : s[0]))
+    } catch (e: any) {
+      setErroCarregamento(e.message || "Erro desconhecido")
+    } finally {
+      setCarregando(false)
+      setAtualizando(false)
+    }
+  }
+
+  useEffect(() => {
+    carregarDados(false)
   }, [])
+
+  async function forcarAtualizacao() {
+    setAtualizando(true)
+    invalidarCache()
+    await carregarDados(true)
+  }
 
   const despSemana = despesas.filter(d => d.semana === semanaSel)
   const receitaSemana = receitas[semanaSel] || 0
@@ -162,16 +212,21 @@ export function AbaDespesas() {
   }, {} as Record<string, number>)
   const dadosCategoria = Object.entries(porCategoria).map(([cat, val]) => ({ cat, val })).sort((a, b) => b.val - a.val)
 
-  async function salvarDespesa(d: Despesa) {
-    await sheetsPost({ aba: "despesas", acao: "upsert", dados: { id: d.id, nome: d.nome, valor: d.valor, status: d.status, semana: d.semana, categoria: d.categoria, criadaEm: d.criadaEm } })
-  }
-  async function excluirDespesaSheets(id: string) {
-    await sheetsPost({ aba: "despesas", acao: "delete", dados: { campo: "id", valor: id } })
-  }
-  function atualizarSemanas(lista: Despesa[]) {
-    const s = Array.from(new Set([semanaAtual(), semanaSel, ...lista.map(x => x.semana)])).sort().reverse()
+  function atualizarSemanasLocais(lista: Despesa[], rec?: Record<string, number>) {
+    const s = construirSemanas(lista, rec ?? receitas)
     setSemanas(s)
   }
+
+  async function salvarDespesa(d: Despesa) {
+    invalidarCache()
+    await sheetsPost({ aba: "despesas", acao: "upsert", dados: { id: d.id, nome: d.nome, valor: d.valor, status: d.status, semana: d.semana, categoria: d.categoria, criadaEm: d.criadaEm } })
+  }
+
+  async function excluirDespesaSheets(id: string) {
+    invalidarCache()
+    await sheetsPost({ aba: "despesas", acao: "delete", dados: { campo: "id", valor: id } })
+  }
+
   function abrirForm(d?: Despesa) {
     if (d) {
       setEditandoId(d.id); setFormNome(d.nome); setFormValor(String(d.valor)); setFormCategoria(d.categoria); setFormStatus(d.status)
@@ -180,54 +235,69 @@ export function AbaDespesas() {
     }
     setFormAberto(true)
   }
+
   async function confirmarForm() {
     if (!formNome.trim() || !formValor) return
     const val = parseFloat(formValor.replace(",", "."))
     if (isNaN(val)) return
     if (editandoId) {
       const novas = despesas.map(d => d.id === editandoId ? { ...d, nome: formNome.trim(), valor: val, categoria: formCategoria, status: formStatus } : d)
-      setDespesas(novas); atualizarSemanas(novas)
+      setDespesas(novas); atualizarSemanasLocais(novas)
       const atualizada = novas.find(d => d.id === editandoId)!
+      salvarCache(novas, receitas)
       await salvarDespesa(atualizada)
     } else {
       const nova: Despesa = { id: gerarId(), nome: formNome.trim(), valor: val, status: formStatus, semana: semanaSel, categoria: formCategoria, criadaEm: new Date().toISOString() }
       const novas = [...despesas, nova]
-      setDespesas(novas); atualizarSemanas(novas)
+      setDespesas(novas); atualizarSemanasLocais(novas)
+      salvarCache(novas, receitas)
       await salvarDespesa(nova)
     }
     setFormAberto(false)
   }
+
   async function excluir(id: string) {
     const novas = despesas.filter(d => d.id !== id)
-    setDespesas(novas); atualizarSemanas(novas)
+    setDespesas(novas); atualizarSemanasLocais(novas)
+    salvarCache(novas, receitas)
     await excluirDespesaSheets(id)
   }
+
   async function alterarStatus(id: string, status: StatusDespesa) {
     const novas = despesas.map(d => d.id === id ? { ...d, status } : d)
     setDespesas(novas)
+    salvarCache(novas, receitas)
     const atualizada = novas.find(d => d.id === id)!
     await salvarDespesa(atualizada)
   }
+
   async function salvarReceita() {
     const val = parseFloat(inputReceita.replace(",", "."))
     if (isNaN(val)) return
+    invalidarCache()
     const novas = { ...receitas, [semanaSel]: val }
     setReceitas(novas); setEditandoReceita(false)
+    salvarCache(despesas, novas)
+    atualizarSemanasLocais(despesas, novas)
     await sheetsPost({ aba: "receitas", acao: "upsert-receita", dados: { semana: semanaSel, valor: val } })
   }
+
   function adicionarCategoria() {
     if (!novaCategoria.trim()) return
     const nova = novaCategoria.trim()
     if (!categorias.includes(nova)) { setCategorias([...categorias, nova]); setFormCategoria(nova) }
     setNovaCategoria(""); setMostrarNovaCategoria(false)
   }
+
   function criarSemana() {
     if (!novaSemanaInput.trim()) return
     const s = Array.from(new Set([novaSemanaInput.trim(), ...semanas])).sort().reverse()
     setSemanas(s); setSemanaSel(novaSemanaInput.trim()); setModalNovaSemana(false); setNovaSemanaInput("")
   }
+
   async function excluirSemana() {
     if (!window.confirm(`Excluir a semana "${semanaSel}" e todas as suas despesas?`)) return
+    invalidarCache()
     const novasDespesas = despesas.filter(d => d.semana !== semanaSel)
     setDespesas(novasDespesas)
     const novasReceitas = { ...receitas }
@@ -236,9 +306,11 @@ export function AbaDespesas() {
     const novasSemanas = semanas.filter(s => s !== semanaSel)
     const lista = novasSemanas.length ? novasSemanas : [semanaAtual()]
     setSemanas(lista); setSemanaSel(lista[0])
+    salvarCache(novasDespesas, novasReceitas)
     await sheetsPost({ aba: "despesas", acao: "delete-semana", dados: { semana: semanaSel } })
     await sheetsPost({ aba: "receitas", acao: "delete", dados: { campo: "semana", valor: semanaSel } })
   }
+
   function exportarCSVSemana() {
     const cabecalho = ["Nome", "Categoria", "Valor (R$)", "Status", "Semana", "Criada em"]
     const linhas = despExibidas.map(d => [d.nome, d.categoria, d.valor.toFixed(2).replace(".", ","), d.status, d.semana, new Date(d.criadaEm).toLocaleString("pt-BR")])
@@ -248,6 +320,7 @@ export function AbaDespesas() {
     const a = document.createElement("a"); a.href = url; a.download = `despesas_${(filtroSemanaTabela || semanaSel).replace(/\//g, "-")}.csv`; a.click()
     URL.revokeObjectURL(url)
   }
+
   const statusConfig = {
     PAGO: { label: "Pago", bg: "rgba(74,222,128,0.1)", color: "#4ade80", border: "rgba(74,222,128,0.25)" },
     PENDENTE: { label: "Pendente", bg: "rgba(251,191,36,0.1)", color: "#fbbf24", border: "rgba(251,191,36,0.25)" },
@@ -260,10 +333,11 @@ export function AbaDespesas() {
       <style>{`@keyframes spin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }`}</style>
     </div>
   )
+
   if (erroCarregamento) return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: 300, color: "#f87171", fontSize: 14, gap: 12 }}>
       <X size={20} />Erro ao carregar: {erroCarregamento}
-      <button onClick={() => window.location.reload()} style={{ padding: "8px 16px", borderRadius: 8, border: "1px solid rgba(248,113,113,0.3)", background: "rgba(248,113,113,0.08)", color: "#f87171", cursor: "pointer", fontFamily: "DM Sans", fontSize: 13 }}>Tentar novamente</button>
+      <button onClick={() => { setCarregando(true); carregarDados(true) }} style={{ padding: "8px 16px", borderRadius: 8, border: "1px solid rgba(248,113,113,0.3)", background: "rgba(248,113,113,0.08)", color: "#f87171", cursor: "pointer", fontFamily: "DM Sans", fontSize: 13 }}>Tentar novamente</button>
     </div>
   )
 
@@ -278,6 +352,14 @@ export function AbaDespesas() {
           <button onClick={() => setModalNovaSemana(true)} style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 8, border: "1px solid rgba(255,216,77,0.25)", background: "rgba(255,216,77,0.08)", color: "#FFD84D", fontFamily: "DM Sans", fontSize: 12, fontWeight: 600, cursor: "pointer" }}><Plus size={13} /> Nova semana</button>
           <button onClick={excluirSemana} style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 8, border: "1px solid rgba(239,83,80,0.25)", background: "rgba(239,83,80,0.08)", color: "#f87171", fontFamily: "DM Sans", fontSize: 12, fontWeight: 600, cursor: "pointer" }}><Trash2 size={13} /> Excluir semana</button>
           <button onClick={exportarCSVSemana} style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 8, border: "1px solid rgba(100,181,246,0.25)", background: "rgba(100,181,246,0.08)", color: "#90caf9", fontFamily: "DM Sans", fontSize: 12, fontWeight: 600, cursor: "pointer" }}><Download size={13} /> Exportar CSV</button>
+          <button
+            onClick={forcarAtualizacao}
+            disabled={atualizando}
+            style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 8, border: "1px solid rgba(74,222,128,0.25)", background: "rgba(74,222,128,0.08)", color: atualizando ? "#555" : "#4ade80", fontFamily: "DM Sans", fontSize: 12, fontWeight: 600, cursor: atualizando ? "not-allowed" : "pointer", opacity: atualizando ? 0.6 : 1, transition: "all 0.2s" }}
+          >
+            <RefreshCw size={13} style={atualizando ? { animation: "spin 1s linear infinite" } : {}} />
+            {atualizando ? "Atualizando..." : "Atualizar"}
+          </button>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10, background: "rgba(74,222,128,0.06)", border: "1px solid rgba(74,222,128,0.2)", borderRadius: 10, padding: "10px 16px" }}>
           <span style={{ fontSize: 11, color: "#555", textTransform: "uppercase", letterSpacing: 1 }}>Receita OL</span>
@@ -627,6 +709,7 @@ export default function Painel() {
         .btn-sair:hover { background:rgba(239,83,80,0.1); border-color:rgba(239,83,80,0.3); color:#ef5350; }
         @keyframes syncRotate { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
         .sincronizando svg { animation: syncRotate 1s linear infinite; }
+        @keyframes spin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
         .msg-ok { font-size:12px; padding:6px 12px; border-radius:6px; background:rgba(76,175,80,0.08); border:1px solid rgba(76,175,80,0.2); color:#66bb6a; }
         .msg-err { font-size:12px; padding:6px 12px; border-radius:6px; background:rgba(239,83,80,0.08); border:1px solid rgba(239,83,80,0.2); color:#ef5350; }
         .tabs-bar { display:flex; align-items:center; gap:2px; padding:0 40px; border-bottom:1px solid rgba(255,255,255,0.06); background:rgba(10,10,15,0.8); }
@@ -716,7 +799,6 @@ export default function Painel() {
           </div>
         </header>
 
-        {/* ── TABS */}
         <div className="tabs-bar">
           <button className={`tab-btn ${aba === "notas" ? "ativa" : ""}`} onClick={() => setAba("notas")}>
             <Users size={15} /> Notas Fiscais
@@ -729,7 +811,6 @@ export default function Painel() {
           </button>
         </div>
 
-        {/* ── ABA NOTAS */}
         {aba === "notas" && (
           <main style={{ padding: "36px 40px", maxWidth: 1600, margin: "0 auto" }}>
             {!avisoFechado && (
@@ -862,10 +943,7 @@ export default function Painel() {
           </main>
         )}
 
-        {/* ── ABA DESPESAS */}
         {aba === "despesas" && <AbaDespesas />}
-
-        {/* ── ABA PERFORMANCE */}
         {aba === "performance" && <AbaPerformance />}
       </div>
 
