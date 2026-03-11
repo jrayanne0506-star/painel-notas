@@ -336,7 +336,7 @@ export function AbaPerformance() {
             <YAxis tick={{ fill: "#444", fontSize: 10 }} axisLine={false} tickLine={false} />
             <Tooltip
               contentStyle={{ background: "#1a1a1a", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, fontFamily: "DM Sans", fontSize: 12 }}
-              formatter={(v: any, name: string) => [name === "entregues" ? v : `${v}%`, name === "entregues" ? "Entregues" : "Pontualidade"]}
+              formatter={(v: any, name: any) => [name === "entregues" ? v : `${v}%`, name === "entregues" ? "Entregues" : "Pontualidade"]}
             />
             <Bar dataKey="entregues" name="entregues" radius={[4, 4, 0, 0]}>
               {top10.map((_, i) => (
