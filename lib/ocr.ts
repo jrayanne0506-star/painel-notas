@@ -1,5 +1,4 @@
 import fetch from "node-fetch"
-const pdfParse = require("pdf-parse")
 
 async function baixarArquivo(link: string): Promise<Buffer> {
   const idMatch = link.match(/\/d\/([a-zA-Z0-9_-]+)/)
@@ -18,6 +17,7 @@ async function baixarArquivo(link: string): Promise<Buffer> {
 }
 
 async function extrairTextoPDF(buffer: Buffer): Promise<string> {
+  const pdfParse = (await import("pdf-parse")).default
   const data = await pdfParse(buffer)
   return data.text
 }
@@ -52,7 +52,6 @@ export async function lerNotaLocal(link: string, valorEsperado: string) {
     return { numeroNfse: "—", statusValidacao: "NÃO É NOTA", valorDetectado: "—" }
   }
 
-  // DEBUG: Teste cada CNPJ individualmente
   const cnpjsParaTester = ["61.895.820/0001-83", "61895820000183", "61.895.820/0001 83"]
   console.log("\n--- TESTANDO CNPJ ---")
   cnpjsParaTester.forEach(cnpj => {
