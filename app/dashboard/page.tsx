@@ -24,9 +24,6 @@ export default function Painel() {
   const [filtroStatus, setFiltroStatus] = useState("")
   const [filtroValidacao, setFiltroValidacao] = useState("")
   const [aplicarFiltro, setAplicarFiltro] = useState(false)
-  const [processando, setProcessando] = useState(false)
-  const [progressoTexto, setProgressoTexto] = useState("")
-  const [salvando, setSalvando] = useState(false)
   const [sincronizando, setSincronizando] = useState(false)
   const [avisoFechado, setAvisoFechado] = useState(false)
   const [msgSalvar, setMsgSalvar] = useState("")
@@ -41,42 +38,9 @@ export default function Painel() {
   useEffect(() => {
     fetch("/api/notas")
       .then(res => res.json())
-      .then(async (data) => {
+      .then((data) => {
         const lista = Array.isArray(data) ? data : []
         setDados(lista)
-
-        const pendentes = lista.filter((n: any) =>
-          n.link && (!n.numeroNfse || n.numeroNfse === "" || n.numeroNfse === "NÃO ENCONTRADO" || n.numeroNfse === "ERRO" || !n.statusValidacao || n.statusValidacao === "")
-        )
-        if (pendentes.length === 0) return
-
-        setProcessando(true)
-        setProgressoTexto(`Processando ${pendentes.length} nota(s)...`)
-
-        try {
-          const res = await fetch("/api/processar-todas-notas", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(pendentes.map((n: any) => ({
-              id: n.id,
-              link: n.link,
-              valorEsperado: n.valor,
-            }))),
-          })
-          const resultados = await res.json()
-          if (Array.isArray(resultados)) {
-            setDados(prev => prev.map((item: any) => {
-              const r = resultados.find((x: any) => String(x.id) === String(item.id))
-              if (!r || r.erro) return item
-              return { ...item, numeroNfse: r.numeroNfse, statusValidacao: r.statusValidacao }
-            }))
-          }
-        } catch (e) {
-          console.error("Erro ao processar notas:", e)
-        } finally {
-          setProcessando(false)
-          setProgressoTexto("")
-        }
       })
       .catch(() => setDados([]))
   }, [])
@@ -90,92 +54,36 @@ export default function Painel() {
 
   async function sincronizar() {
     setSincronizando(true)
-    setProcessando(true)
-    setProgressoTexto("Sincronizando dados da planilha...")
     setMsgSalvar("")
 
     try {
-      // 1️⃣ Recarrega as notas da planilha (com cache bust)
       const timestamp = Date.now()
       const resNotas = await fetch(`/api/notas?t=${timestamp}`, {
         method: "GET",
         cache: "no-store",
-        headers: { 
+        headers: {
           "Cache-Control": "no-cache, no-store, must-revalidate",
           "Pragma": "no-cache"
         }
       })
-      
+
       if (!resNotas.ok) throw new Error("Erro ao buscar notas")
-      
+
       const listaAtualizada = await resNotas.json()
       const novasNotas = Array.isArray(listaAtualizada) ? listaAtualizada : []
-      
-      console.log("✓ Notas sincronizadas da planilha:", novasNotas.length, "registros")
       setDados(novasNotas)
-
-      // 2️⃣ Identifica as pendentes
-      const pendentes = novasNotas.filter((n: any) =>
-       n.link && (!n.numeroNfse || n.numeroNfse === "" || n.numeroNfse === "NÃO ENCONTRADO" || n.numeroNfse === "ERRO" || n.statusValidacao === "NÃO É NOTA" || n.statusValidacao === "")
-      )
-
-      console.log("⏳ Notas pendentes para processar:", pendentes.length)
-
-      // 3️⃣ Se houver pendentes, processa elas
-      if (pendentes.length > 0) {
-        setProgressoTexto(`Processando ${pendentes.length} nota(s)...`)
-
-        const resProcessar = await fetch("/api/processar-todas-notas", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(pendentes.map((n: any) => ({
-            id: n.id,
-            link: n.link,
-            valorEsperado: n.valor,
-          }))),
-        })
-
-        if (!resProcessar.ok) throw new Error("Erro ao processar notas")
-
-        const resultados = await resProcessar.json()
-        console.log("✓ Notas processadas:", resultados.length)
-        
-        if (Array.isArray(resultados)) {
-          // 4️⃣ Atualiza os dados com os resultados
-          setDados(prev => prev.map((item: any) => {
-            const r = resultados.find((x: any) => String(x.id) === String(item.id))
-            if (!r || r.erro) {
-              console.warn(`⚠️ Erro ao processar nota ${item.id}:`, r?.erro)
-              return item
-            }
-            console.log(`✓ Nota ${item.id} processada: ${r.numeroNfse}`)
-            return { 
-              ...item, 
-              numeroNfse: r.numeroNfse || "não encontrado", 
-              statusValidacao: r.statusValidacao || "NÃO É NOTA",
-              valorDetectado: r.valorDetectado
-            }
-          }))
-        }
-      } else {
-        console.log("✓ Nenhuma nota pendente para processar")
-      }
 
       setMsgSalvar("✓ Sincronização concluída com sucesso!")
     } catch (e: any) {
-      console.error("❌ Erro ao sincronizar:", e.message)
       setMsgSalvar(`✗ Erro: ${e.message}`)
     } finally {
       setSincronizando(false)
-      setProcessando(false)
-      setProgressoTexto("")
       setTimeout(() => setMsgSalvar(""), 5000)
     }
   }
 
   async function salvarSemana() {
     if (!periodoSalvar[0] || !periodoSalvar[1]) return
-    setSalvando(true)
     setMsgSalvar("")
     setModalSalvar(false)
     const inicio = periodoSalvar[0].toLocaleDateString("pt-BR").replace(/\//g, "-")
@@ -199,7 +107,6 @@ export default function Painel() {
     } catch {
       setMsgSalvar("✗ Erro ao conectar com o servidor")
     } finally {
-      setSalvando(false)
       setTimeout(() => setMsgSalvar(""), 5000)
     }
   }
@@ -248,8 +155,6 @@ export default function Painel() {
   function sair() { router.push("/login") }
 
   const safeDados = Array.isArray(dados) ? dados : []
-
-  // Cards sempre refletem a fonte ativa (histórico ou atual)
   const fonteCards = modoHistorico ? dadosHistorico : safeDados
   const totalEntregadores = fonteCards.length
   const enviadas = fonteCards.filter(i => i.status === "ENVIADO").length
@@ -268,14 +173,12 @@ export default function Painel() {
 
   const filtrados = fonteDados.filter((item) => {
     if (!aplicarFiltro) return true
-    // Filtro de período só aplica na semana atual (não no histórico)
     if (!modoHistorico && filtroSemana[0] && filtroSemana[1]) {
       const inicio = new Date(filtroSemana[0])
       const fim = new Date(filtroSemana[1])
       const dataItem = new Date(item.semana)
       if (dataItem < inicio || dataItem > fim) return false
     }
-    // Filtro por dia específico
     if (!modoHistorico && filtroDia) {
       const diaFiltro = new Date(filtroDia).toLocaleDateString("pt-BR")
       const diaItem = new Date(item.semana).toLocaleDateString("pt-BR")
@@ -338,656 +241,122 @@ export default function Painel() {
         @import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap');
 
         * { box-sizing: border-box; margin: 0; padding: 0; }
-
-        body {
-          background: #0a0a0f;
-          color: #e8e8f0;
-          font-family: 'DM Sans', sans-serif;
-        }
-
+        body { background: #0a0a0f; color: #e8e8f0; font-family: 'DM Sans', sans-serif; }
         .painel-root { min-height: 100vh; background: #0a0a0f; padding: 0; }
 
         .header {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          padding: 28px 40px;
-          border-bottom: 1px solid rgba(255,255,255,0.06);
-          background: rgba(10,10,15,0.85);
-          backdrop-filter: blur(20px);
-          position: sticky;
-          top: 0;
-          z-index: 100;
-          box-shadow: 0 1px 40px rgba(0,0,0,0.4);
+          display: flex; align-items: center; justify-content: space-between;
+          padding: 28px 40px; border-bottom: 1px solid rgba(255,255,255,0.06);
+          background: rgba(10,10,15,0.85); backdrop-filter: blur(20px);
+          position: sticky; top: 0; z-index: 100; box-shadow: 0 1px 40px rgba(0,0,0,0.4);
         }
-
         .header-brand { display: flex; align-items: center; gap: 18px; }
-
-        .header-logo {
-          font-size: 48px;
-          line-height: 1;
-          filter: drop-shadow(0 0 18px rgba(180,60,220,0.8));
-          animation: floatScorpion 3s ease-in-out infinite;
-        }
-
-        @keyframes floatScorpion {
-          0%, 100% { transform: translateY(0px); }
-          50% { transform: translateY(-4px); }
-        }
-
-        .header-title {
-          font-family: 'Syne', sans-serif;
-          font-size: 28px;
-          font-weight: 800;
-          letter-spacing: -0.8px;
-          color: #fff;
-          background: linear-gradient(135deg, #fff 40%, #ce93d8 100%);
-          -webkit-background-clip: text;
-          -webkit-text-fill-color: transparent;
-          background-clip: text;
-          line-height: 1.1;
-        }
-
-        .header-subtitle {
-          font-size: 11px;
-          color: #666;
-          letter-spacing: 3px;
-          text-transform: uppercase;
-          margin-top: 3px;
-        }
-
+        .header-logo { font-size: 48px; line-height: 1; filter: drop-shadow(0 0 18px rgba(180,60,220,0.8)); animation: floatScorpion 3s ease-in-out infinite; }
+        @keyframes floatScorpion { 0%, 100% { transform: translateY(0px); } 50% { transform: translateY(-4px); } }
+        .header-title { font-family: 'Syne', sans-serif; font-size: 28px; font-weight: 800; letter-spacing: -0.8px; color: #fff; background: linear-gradient(135deg, #fff 40%, #ce93d8 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; line-height: 1.1; }
+        .header-subtitle { font-size: 11px; color: #666; letter-spacing: 3px; text-transform: uppercase; margin-top: 3px; }
         .header-actions { display: flex; align-items: center; gap: 10px; }
 
-        .btn-salvar {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          padding: 9px 18px;
-          border-radius: 8px;
-          border: 1px solid rgba(76,175,80,0.25);
-          background: rgba(76,175,80,0.08);
-          color: #66bb6a;
-          font-family: 'DM Sans', sans-serif;
-          font-size: 13px;
-          font-weight: 600;
-          cursor: pointer;
-          transition: all 0.2s;
-          white-space: nowrap;
-        }
-
-        .btn-salvar:hover:not(:disabled) {
-          background: rgba(76,175,80,0.15);
-          border-color: rgba(76,175,80,0.4);
-          transform: translateY(-1px);
-        }
-
+        .btn-salvar { display: flex; align-items: center; gap: 8px; padding: 9px 18px; border-radius: 8px; border: 1px solid rgba(76,175,80,0.25); background: rgba(76,175,80,0.08); color: #66bb6a; font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s; white-space: nowrap; }
+        .btn-salvar:hover:not(:disabled) { background: rgba(76,175,80,0.15); border-color: rgba(76,175,80,0.4); transform: translateY(-1px); }
         .btn-salvar:disabled { opacity: 0.5; cursor: not-allowed; }
 
-        .btn-sincronizar {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          padding: 9px 18px;
-          border-radius: 8px;
-          border: 1px solid rgba(100,181,246,0.25);
-          background: rgba(100,181,246,0.08);
-          color: #90caf9;
-          font-family: 'DM Sans', sans-serif;
-          font-size: 13px;
-          font-weight: 600;
-          cursor: pointer;
-          transition: all 0.2s;
-          white-space: nowrap;
-        }
+        .btn-sincronizar { display: flex; align-items: center; gap: 8px; padding: 9px 18px; border-radius: 8px; border: 1px solid rgba(100,181,246,0.25); background: rgba(100,181,246,0.08); color: #90caf9; font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s; white-space: nowrap; }
+        .btn-sincronizar:hover:not(:disabled) { background: rgba(100,181,246,0.15); border-color: rgba(100,181,246,0.4); transform: translateY(-1px); }
+        .btn-sincronizar:disabled { opacity: 0.5; cursor: not-allowed; }
+        @keyframes syncRotate { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        .btn-sincronizar.sincronizando svg { animation: syncRotate 1s linear infinite; }
 
-        .btn-sincronizar:hover:not(:disabled) {
-          background: rgba(100,181,246,0.15);
-          border-color: rgba(100,181,246,0.4);
-          transform: translateY(-1px);
-        }
+        .msg-salvar { font-size: 12px; padding: 6px 12px; border-radius: 6px; background: rgba(76,175,80,0.08); border: 1px solid rgba(76,175,80,0.2); color: #66bb6a; }
+        .msg-salvar.erro { background: rgba(239,83,80,0.08); border-color: rgba(239,83,80,0.2); color: #ef5350; }
 
-        .btn-sincronizar:disabled {
-          opacity: 0.5;
-          cursor: not-allowed;
-        }
+        .btn-comparativo { display: flex; align-items: center; gap: 8px; padding: 9px 18px; border-radius: 8px; border: 1px solid rgba(167,139,250,0.25); background: rgba(167,139,250,0.08); color: #a78bfa; font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s; }
+        .btn-comparativo:hover { background: rgba(167,139,250,0.15); border-color: rgba(167,139,250,0.4); transform: translateY(-1px); }
 
-        @keyframes syncRotate {
-          from { transform: rotate(0deg); }
-          to { transform: rotate(360deg); }
-        }
+        .btn-export { display: flex; align-items: center; gap: 8px; padding: 9px 18px; border-radius: 8px; border: 1px solid rgba(100,181,246,0.25); background: rgba(100,181,246,0.08); color: #90caf9; font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s; }
+        .btn-export:hover { background: rgba(100,181,246,0.15); border-color: rgba(100,181,246,0.4); transform: translateY(-1px); }
 
-        .btn-sincronizar.sincronizando svg {
-          animation: syncRotate 1s linear infinite;
-        }
-
-        .msg-salvar {
-          font-size: 12px;
-          padding: 6px 12px;
-          border-radius: 6px;
-          background: rgba(76,175,80,0.08);
-          border: 1px solid rgba(76,175,80,0.2);
-          color: #66bb6a;
-        }
-
-        .msg-salvar.erro {
-          background: rgba(239,83,80,0.08);
-          border-color: rgba(239,83,80,0.2);
-          color: #ef5350;
-        }
-
-        .historico-select {
-          padding: 9px 12px;
-          border-radius: 8px;
-          border: 1px solid rgba(255,255,255,0.08);
-          background: rgba(255,255,255,0.04);
-          color: #e0e0e0;
-          font-family: 'DM Sans', sans-serif;
-          font-size: 13px;
-          outline: none;
-          cursor: pointer;
-        }
-
-        .historico-select option { background: #1a1a2e; }
-
-        .modal-overlay {
-          position: fixed;
-          inset: 0;
-          background: rgba(0,0,0,0.7);
-          backdrop-filter: blur(4px);
-          z-index: 1000;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        }
-
-        .modal-box {
-          background: #13131a;
-          border: 1px solid rgba(255,255,255,0.1);
-          border-radius: 16px;
-          padding: 32px;
-          width: 380px;
-          display: flex;
-          flex-direction: column;
-          gap: 20px;
-        }
-
-        .modal-title {
-          font-family: 'Syne', sans-serif;
-          font-size: 18px;
-          font-weight: 700;
-          color: #fff;
-        }
-
-        .modal-label {
-          font-size: 11px;
-          color: #555;
-          text-transform: uppercase;
-          letter-spacing: 1px;
-          margin-bottom: 8px;
-        }
-
-        .modal-actions {
-          display: flex;
-          gap: 10px;
-          justify-content: flex-end;
-        }
-
-        .banner-historico {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-          padding: 12px 20px;
-          border-radius: 10px;
-          background: rgba(100,181,246,0.08);
-          border: 1px solid rgba(100,181,246,0.2);
-          color: #90caf9;
-          font-size: 13px;
-          font-weight: 500;
-          margin-bottom: 20px;
-        }
-
-        .btn-comparativo {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          padding: 9px 18px;
-          border-radius: 8px;
-          border: 1px solid rgba(167,139,250,0.25);
-          background: rgba(167,139,250,0.08);
-          color: #a78bfa;
-          font-family: 'DM Sans', sans-serif;
-          font-size: 13px;
-          font-weight: 600;
-          cursor: pointer;
-          transition: all 0.2s;
-        }
-
-        .btn-comparativo:hover {
-          background: rgba(167,139,250,0.15);
-          border-color: rgba(167,139,250,0.4);
-          transform: translateY(-1px);
-        }
-
-        .btn-export {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          padding: 9px 18px;
-          border-radius: 8px;
-          border: 1px solid rgba(100,181,246,0.25);
-          background: rgba(100,181,246,0.08);
-          color: #90caf9;
-          font-family: 'DM Sans', sans-serif;
-          font-size: 13px;
-          font-weight: 600;
-          cursor: pointer;
-          transition: all 0.2s;
-        }
-
-        .btn-export:hover {
-          background: rgba(100,181,246,0.15);
-          border-color: rgba(100,181,246,0.4);
-          transform: translateY(-1px);
-        }
-
-        .btn-sair {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          padding: 9px 18px;
-          border-radius: 8px;
-          border: 1px solid rgba(255,255,255,0.1);
-          background: rgba(255,255,255,0.04);
-          color: #aaa;
-          font-family: 'DM Sans', sans-serif;
-          font-size: 13px;
-          font-weight: 500;
-          cursor: pointer;
-          transition: all 0.2s;
-        }
-
-        .btn-sair:hover {
-          background: rgba(239,83,80,0.1);
-          border-color: rgba(239,83,80,0.3);
-          color: #ef5350;
-        }
+        .btn-sair { display: flex; align-items: center; gap: 8px; padding: 9px 18px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1); background: rgba(255,255,255,0.04); color: #aaa; font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.2s; }
+        .btn-sair:hover { background: rgba(239,83,80,0.1); border-color: rgba(239,83,80,0.3); color: #ef5350; }
 
         .main { padding: 36px 40px; max-width: 1600px; margin: 0 auto; }
 
-        .banner-aviso {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: 12px;
-          padding: 14px 20px;
-          border-radius: 10px;
-          background: rgba(255,152,0,0.08);
-          border: 1px solid rgba(255,152,0,0.25);
-          color: #ffb74d;
-          font-size: 13px;
-          font-weight: 500;
-          margin-bottom: 20px;
-        }
-
+        .banner-aviso { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 20px; border-radius: 10px; background: rgba(255,152,0,0.08); border: 1px solid rgba(255,152,0,0.25); color: #ffb74d; font-size: 13px; font-weight: 500; margin-bottom: 20px; }
         .banner-aviso-texto { display: flex; align-items: center; gap: 10px; }
-
-        .btn-fechar-aviso {
-          background: none;
-          border: none;
-          color: #ffb74d;
-          cursor: pointer;
-          padding: 2px;
-          opacity: 0.6;
-          transition: opacity 0.2s;
-          flex-shrink: 0;
-        }
-
+        .btn-fechar-aviso { background: none; border: none; color: #ffb74d; cursor: pointer; padding: 2px; opacity: 0.6; transition: opacity 0.2s; flex-shrink: 0; }
         .btn-fechar-aviso:hover { opacity: 1; }
 
-        .banner-processando {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-          padding: 14px 20px;
-          border-radius: 10px;
-          background: rgba(156,39,176,0.1);
-          border: 1px solid rgba(156,39,176,0.25);
-          color: #ce93d8;
-          font-size: 13px;
-          font-weight: 500;
-          margin-bottom: 28px;
-          animation: pulse 2s ease-in-out infinite;
-        }
-
-        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.7; } }
-
-        .spinner {
-          width: 16px;
-          height: 16px;
-          border: 2px solid rgba(206,147,216,0.3);
-          border-top-color: #ce93d8;
-          border-radius: 50%;
-          animation: spin 0.8s linear infinite;
-          flex-shrink: 0;
-        }
-
-        @keyframes spin { to { transform: rotate(360deg); } }
-
         .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 28px; }
-
-        .stat-card {
-          background: rgba(255,255,255,0.03);
-          border: 1px solid rgba(255,255,255,0.07);
-          border-radius: 14px;
-          padding: 22px 24px;
-          display: flex;
-          align-items: center;
-          gap: 16px;
-          cursor: pointer;
-          transition: all 0.2s;
-          position: relative;
-          overflow: hidden;
-        }
-
-        .stat-card::before {
-          content: '';
-          position: absolute;
-          inset: 0;
-          background: var(--card-glow);
-          opacity: 0;
-          transition: opacity 0.2s;
-          border-radius: inherit;
-        }
-
+        .stat-card { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.07); border-radius: 14px; padding: 22px 24px; display: flex; align-items: center; gap: 16px; cursor: pointer; transition: all 0.2s; position: relative; overflow: hidden; }
+        .stat-card::before { content: ''; position: absolute; inset: 0; background: var(--card-glow); opacity: 0; transition: opacity 0.2s; border-radius: inherit; }
         .stat-card:hover::before { opacity: 1; }
         .stat-card:hover { border-color: var(--card-accent); transform: translateY(-2px); }
-
-        .stat-icon-wrap {
-          width: 44px;
-          height: 44px;
-          border-radius: 10px;
-          background: var(--card-icon-bg);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          flex-shrink: 0;
-        }
-
+        .stat-icon-wrap { width: 44px; height: 44px; border-radius: 10px; background: var(--card-icon-bg); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
         .stat-label { font-size: 11px; color: #666; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px; }
         .stat-value { font-family: 'Syne', sans-serif; font-size: 24px; font-weight: 700; color: #fff; line-height: 1; }
 
         .bottom-section { display: grid; grid-template-columns: 280px 1fr; gap: 20px; margin-bottom: 28px; }
+        .chart-card { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.07); border-radius: 14px; padding: 24px; }
+        .chart-title { font-family: 'Syne', sans-serif; font-size: 13px; font-weight: 700; color: #fff; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 20px; }
 
-        .chart-card {
-          background: rgba(255,255,255,0.03);
-          border: 1px solid rgba(255,255,255,0.07);
-          border-radius: 14px;
-          padding: 24px;
-        }
-
-        .chart-title {
-          font-family: 'Syne', sans-serif;
-          font-size: 13px;
-          font-weight: 700;
-          color: #fff;
-          text-transform: uppercase;
-          letter-spacing: 1.5px;
-          margin-bottom: 20px;
-        }
-
-        .filters-card {
-          background: rgba(255,255,255,0.03);
-          border: 1px solid rgba(255,255,255,0.07);
-          border-radius: 14px;
-          padding: 24px;
-        }
-
-        .filters-title {
-          font-family: 'Syne', sans-serif;
-          font-size: 13px;
-          font-weight: 700;
-          color: #fff;
-          text-transform: uppercase;
-          letter-spacing: 1.5px;
-          margin-bottom: 18px;
-          display: flex;
-          align-items: center;
-          gap: 8px;
-        }
-
+        .filters-card { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.07); border-radius: 14px; padding: 24px; }
+        .filters-title { font-family: 'Syne', sans-serif; font-size: 13px; font-weight: 700; color: #fff; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 18px; display: flex; align-items: center; gap: 8px; }
         .filters-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; align-items: end; }
-
         .filter-field { display: flex; flex-direction: column; gap: 6px; }
         .filter-label { font-size: 11px; color: #555; text-transform: uppercase; letter-spacing: 1px; }
-
-        .filter-input, .filter-select {
-          padding: 9px 12px;
-          border-radius: 8px;
-          border: 1px solid rgba(255,255,255,0.08);
-          background: rgba(255,255,255,0.04);
-          color: #e0e0e0;
-          font-family: 'DM Sans', sans-serif;
-          font-size: 13px;
-          outline: none;
-          transition: border-color 0.2s;
-          width: 100%;
-        }
-
+        .filter-input, .filter-select { padding: 9px 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.08); background: rgba(255,255,255,0.04); color: #e0e0e0; font-family: 'DM Sans', sans-serif; font-size: 13px; outline: none; transition: border-color 0.2s; width: 100%; }
         .filter-input:focus, .filter-select:focus { border-color: rgba(156,39,176,0.5); }
         .filter-select option { background: #1a1a2e; }
-
         .datepicker-wrap .react-datepicker-wrapper { width: 100%; }
-
-        .datepicker-wrap input {
-          padding: 9px 12px;
-          border-radius: 8px;
-          border: 1px solid rgba(255,255,255,0.08);
-          background: rgba(255,255,255,0.04);
-          color: #e0e0e0;
-          font-family: 'DM Sans', sans-serif;
-          font-size: 13px;
-          outline: none;
-          width: 100%;
-          transition: border-color 0.2s;
-        }
-
+        .datepicker-wrap input { padding: 9px 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.08); background: rgba(255,255,255,0.04); color: #e0e0e0; font-family: 'DM Sans', sans-serif; font-size: 13px; outline: none; width: 100%; transition: border-color 0.2s; }
         .datepicker-wrap input:focus { border-color: rgba(156,39,176,0.5); }
-
         .filters-actions { display: flex; gap: 10px; align-items: flex-end; }
 
-        .btn-primary {
-          display: flex;
-          align-items: center;
-          gap: 7px;
-          padding: 9px 18px;
-          border-radius: 8px;
-          border: none;
-          background: linear-gradient(135deg, #7b1fa2, #9c27b0);
-          color: #fff;
-          font-family: 'DM Sans', sans-serif;
-          font-size: 13px;
-          font-weight: 600;
-          cursor: pointer;
-          transition: all 0.2s;
-          white-space: nowrap;
-        }
-
-        .btn-primary:hover {
-          background: linear-gradient(135deg, #8e24aa, #ab47bc);
-          transform: translateY(-1px);
-          box-shadow: 0 4px 16px rgba(156,39,176,0.35);
-        }
-
-        .btn-secondary {
-          display: flex;
-          align-items: center;
-          gap: 7px;
-          padding: 9px 14px;
-          border-radius: 8px;
-          border: 1px solid rgba(255,255,255,0.08);
-          background: rgba(255,255,255,0.04);
-          color: #888;
-          font-family: 'DM Sans', sans-serif;
-          font-size: 13px;
-          font-weight: 500;
-          cursor: pointer;
-          transition: all 0.2s;
-          white-space: nowrap;
-        }
-
+        .btn-primary { display: flex; align-items: center; gap: 7px; padding: 9px 18px; border-radius: 8px; border: none; background: linear-gradient(135deg, #7b1fa2, #9c27b0); color: #fff; font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s; white-space: nowrap; }
+        .btn-primary:hover { background: linear-gradient(135deg, #8e24aa, #ab47bc); transform: translateY(-1px); box-shadow: 0 4px 16px rgba(156,39,176,0.35); }
+        .btn-secondary { display: flex; align-items: center; gap: 7px; padding: 9px 14px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.08); background: rgba(255,255,255,0.04); color: #888; font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.2s; white-space: nowrap; }
         .btn-secondary:hover { background: rgba(255,255,255,0.08); color: #ccc; }
 
-        .table-card {
-          background: rgba(255,255,255,0.02);
-          border: 1px solid rgba(255,255,255,0.07);
-          border-radius: 14px;
-          overflow: hidden;
-        }
-
-        .table-header-bar {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          padding: 18px 24px;
-          border-bottom: 1px solid rgba(255,255,255,0.06);
-        }
-
-        .table-title {
-          font-family: 'Syne', sans-serif;
-          font-size: 13px;
-          font-weight: 700;
-          color: #fff;
-          text-transform: uppercase;
-          letter-spacing: 1.5px;
-        }
-
-        .table-count {
-          font-size: 12px;
-          color: #555;
-          background: rgba(255,255,255,0.04);
-          border: 1px solid rgba(255,255,255,0.07);
-          padding: 4px 10px;
-          border-radius: 20px;
-        }
-
+        .table-card { background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.07); border-radius: 14px; overflow: hidden; }
+        .table-header-bar { display: flex; align-items: center; justify-content: space-between; padding: 18px 24px; border-bottom: 1px solid rgba(255,255,255,0.06); }
+        .table-title { font-family: 'Syne', sans-serif; font-size: 13px; font-weight: 700; color: #fff; text-transform: uppercase; letter-spacing: 1.5px; }
+        .table-count { font-size: 12px; color: #555; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.07); padding: 4px 10px; border-radius: 20px; }
         .table-wrap { overflow-x: auto; }
         table { width: 100%; border-collapse: collapse; }
         thead tr { border-bottom: 1px solid rgba(255,255,255,0.06); }
-
-        th {
-          padding: 12px 16px;
-          text-align: left;
-          font-family: 'DM Sans', sans-serif;
-          font-size: 11px;
-          font-weight: 500;
-          color: #555;
-          text-transform: uppercase;
-          letter-spacing: 1px;
-          white-space: nowrap;
-        }
-
+        th { padding: 12px 16px; text-align: left; font-family: 'DM Sans', sans-serif; font-size: 11px; font-weight: 500; color: #555; text-transform: uppercase; letter-spacing: 1px; white-space: nowrap; }
         tbody tr { border-bottom: 1px solid rgba(255,255,255,0.04); transition: background 0.15s; }
         tbody tr:hover { background: rgba(255,255,255,0.03); }
         tbody tr:last-child { border-bottom: none; }
-
         td { padding: 13px 16px; font-size: 13px; color: #ccc; white-space: nowrap; }
-
         .td-nome { font-weight: 500; color: #e8e8f0; max-width: 200px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .td-valor { font-family: 'Syne', sans-serif; font-weight: 600; color: #e8e8f0; }
 
-        .status-pill {
-          display: inline-flex;
-          align-items: center;
-          gap: 5px;
-          padding: 4px 10px;
-          border-radius: 20px;
-          font-size: 11px;
-          font-weight: 600;
-          letter-spacing: 0.5px;
-        }
-
+        .status-pill { display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; letter-spacing: 0.5px; }
         .status-enviado { background: rgba(46,125,50,0.12); color: #66bb6a; border: 1px solid rgba(102,187,106,0.2); }
         .status-pendente { background: rgba(183,28,28,0.12); color: #ef9a9a; border: 1px solid rgba(239,154,154,0.2); }
 
-        .link-nota {
-          display: inline-flex;
-          align-items: center;
-          gap: 5px;
-          padding: 5px 10px;
-          border-radius: 6px;
-          border: 1px solid rgba(156,39,176,0.25);
-          background: rgba(156,39,176,0.08);
-          color: #ce93d8;
-          text-decoration: none;
-          font-size: 12px;
-          font-weight: 500;
-          transition: all 0.2s;
-        }
-
+        .link-nota { display: inline-flex; align-items: center; gap: 5px; padding: 5px 10px; border-radius: 6px; border: 1px solid rgba(156,39,176,0.25); background: rgba(156,39,176,0.08); color: #ce93d8; text-decoration: none; font-size: 12px; font-weight: 500; transition: all 0.2s; }
         .link-nota:hover { background: rgba(156,39,176,0.18); border-color: rgba(156,39,176,0.5); color: #e1bee7; }
 
-        .btn-whatsapp {
-          display: inline-flex;
-          align-items: center;
-          gap: 5px;
-          padding: 5px 10px;
-          border-radius: 6px;
-          border: 1px solid rgba(37,211,102,0.25);
-          background: rgba(37,211,102,0.08);
-          color: #25d366;
-          text-decoration: none;
-          font-size: 12px;
-          font-weight: 600;
-          transition: all 0.2s;
-        }
-
+        .btn-whatsapp { display: inline-flex; align-items: center; gap: 5px; padding: 5px 10px; border-radius: 6px; border: 1px solid rgba(37,211,102,0.25); background: rgba(37,211,102,0.08); color: #25d366; text-decoration: none; font-size: 12px; font-weight: 600; transition: all 0.2s; }
         .btn-whatsapp:hover { background: rgba(37,211,102,0.18); border-color: rgba(37,211,102,0.45); transform: translateY(-1px); }
 
-        .btn-telegram {
-          display: inline-flex;
-          align-items: center;
-          gap: 5px;
-          padding: 5px 10px;
-          border-radius: 6px;
-          border: 1px solid rgba(41,182,246,0.25);
-          background: rgba(41,182,246,0.08);
-          color: #29b6f6;
-          text-decoration: none;
-          font-size: 12px;
-          font-weight: 600;
-          transition: all 0.2s;
-          cursor: pointer;
-          font-family: 'DM Sans', sans-serif;
-        }
-
+        .btn-telegram { display: inline-flex; align-items: center; gap: 5px; padding: 5px 10px; border-radius: 6px; border: 1px solid rgba(41,182,246,0.25); background: rgba(41,182,246,0.08); color: #29b6f6; text-decoration: none; font-size: 12px; font-weight: 600; transition: all 0.2s; cursor: pointer; font-family: 'DM Sans', sans-serif; }
         .btn-telegram:hover { background: rgba(41,182,246,0.18); border-color: rgba(41,182,246,0.45); transform: translateY(-1px); }
 
         .acoes-cell { display: flex; flex-direction: column; gap: 5px; }
-
         .sem-telefone { font-size: 11px; color: #444; font-style: italic; }
-
         .nfse-num { font-family: 'Syne', sans-serif; font-size: 13px; font-weight: 700; color: #fff; }
+        .validacao-badge { display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; border: 1px solid; }
 
-        .validacao-badge {
-          display: inline-flex;
-          align-items: center;
-          gap: 6px;
-          padding: 5px 12px;
-          border-radius: 20px;
-          font-size: 12px;
-          font-weight: 600;
-          border: 1px solid;
-        }
+        .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); backdrop-filter: blur(4px); z-index: 1000; display: flex; align-items: center; justify-content: center; }
+        .modal-box { background: #13131a; border: 1px solid rgba(255,255,255,0.1); border-radius: 16px; padding: 32px; width: 380px; display: flex; flex-direction: column; gap: 20px; }
+        .modal-title { font-family: 'Syne', sans-serif; font-size: 18px; font-weight: 700; color: #fff; }
+        .modal-label { font-size: 11px; color: #555; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }
+        .modal-actions { display: flex; gap: 10px; justify-content: flex-end; }
 
-        .custom-tooltip {
-          background: #1a1a2e;
-          border: 1px solid rgba(255,255,255,0.1);
-          border-radius: 8px;
-          padding: 10px 14px;
-          font-family: 'DM Sans', sans-serif;
-          font-size: 13px;
-          color: #e0e0e0;
-        }
+        .custom-tooltip { background: #1a1a2e; border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 10px 14px; font-family: 'DM Sans', sans-serif; font-size: 13px; color: #e0e0e0; }
       `}</style>
 
       <div className="painel-root">
@@ -1005,18 +374,18 @@ export default function Painel() {
                 {msgSalvar}
               </span>
             )}
-            <button 
+            <button
               className={`btn-sincronizar ${sincronizando ? "sincronizando" : ""}`}
-              onClick={sincronizar} 
-              disabled={sincronizando || processando}
-              title="Sincronizar dados da planilha e processar notas"
+              onClick={sincronizar}
+              disabled={sincronizando}
+              title="Sincronizar dados da planilha"
             >
               <RefreshCw size={14} />
               {sincronizando ? "Sincronizando..." : "Sincronizar"}
             </button>
-            <button className="btn-salvar" onClick={() => setModalSalvar(true)} disabled={salvando}>
+            <button className="btn-salvar" onClick={() => setModalSalvar(true)}>
               <Save size={14} />
-              {salvando ? "Salvando..." : "Salvar Semana"}
+              Salvar Semana
             </button>
             <button className="btn-comparativo" onClick={() => router.push("/comparativo")}>
               <BarChart2 size={14} />
@@ -1045,32 +414,22 @@ export default function Painel() {
             </div>
           )}
 
-          {processando && (
-            <div className="banner-processando">
-              <div className="spinner" />
-              {progressoTexto}
-            </div>
-          )}
-
           <div className="stats-grid">
             <div className="stat-card" onClick={limpar}
               style={{ "--card-accent": "rgba(156,39,176,0.3)", "--card-glow": "linear-gradient(135deg, rgba(156,39,176,0.05), transparent)", "--card-icon-bg": "rgba(156,39,176,0.15)" } as any}>
               <div className="stat-icon-wrap"><Users size={20} color="#ce93d8" /></div>
               <div><div className="stat-label">Entregadores</div><div className="stat-value">{totalEntregadores}</div></div>
             </div>
-
             <div className="stat-card" onClick={() => { setFiltroStatus("ENVIADO"); setAplicarFiltro(true) }}
               style={{ "--card-accent": "rgba(76,175,80,0.3)", "--card-glow": "linear-gradient(135deg, rgba(76,175,80,0.05), transparent)", "--card-icon-bg": "rgba(76,175,80,0.15)" } as any}>
               <div className="stat-icon-wrap"><CheckCircle size={20} color="#66bb6a" /></div>
               <div><div className="stat-label">Enviadas</div><div className="stat-value">{enviadas}</div></div>
             </div>
-
             <div className="stat-card" onClick={() => { setFiltroStatus("PENDENTE"); setAplicarFiltro(true) }}
               style={{ "--card-accent": "rgba(239,83,80,0.3)", "--card-glow": "linear-gradient(135deg, rgba(239,83,80,0.05), transparent)", "--card-icon-bg": "rgba(239,83,80,0.15)" } as any}>
               <div className="stat-icon-wrap"><AlertCircle size={20} color="#ef9a9a" /></div>
               <div><div className="stat-label">Pendentes</div><div className="stat-value">{pendentes}</div></div>
             </div>
-
             <div className="stat-card"
               style={{ "--card-accent": "rgba(100,181,246,0.3)", "--card-glow": "linear-gradient(135deg, rgba(100,181,246,0.05), transparent)", "--card-icon-bg": "rgba(100,181,246,0.15)" } as any}>
               <div className="stat-icon-wrap"><DollarSign size={20} color="#90caf9" /></div>
@@ -1105,43 +464,29 @@ export default function Painel() {
                     <div className="filter-field">
                       <div className="filter-label">Período</div>
                       <div className="datepicker-wrap">
-                        <DatePicker
-                          selectsRange
-                          startDate={filtroSemana[0]}
-                          endDate={filtroSemana[1]}
+                        <DatePicker selectsRange startDate={filtroSemana[0]} endDate={filtroSemana[1]}
                           onChange={(update) => { setFiltroSemana(update); setFiltroDia(null) }}
-                          dateFormat="dd/MM/yyyy"
-                          placeholderText="Data início → Data fim"
-                          calendarStartDay={1}
-                        />
+                          dateFormat="dd/MM/yyyy" placeholderText="Data início → Data fim" calendarStartDay={1} />
                       </div>
                     </div>
                     <div className="filter-field">
                       <div className="filter-label">Dia específico</div>
                       <div className="datepicker-wrap">
-                        <DatePicker
-                          selected={filtroDia}
+                        <DatePicker selected={filtroDia}
                           onChange={(date: any) => { setFiltroDia(date); setFiltroSemana([null, null]) }}
-                          dateFormat="dd/MM/yyyy"
-                          placeholderText="Selecione um dia"
-                          calendarStartDay={1}
-                          isClearable
-                        />
+                          dateFormat="dd/MM/yyyy" placeholderText="Selecione um dia" calendarStartDay={1} isClearable />
                       </div>
                     </div>
                   </>
                 )}
-
                 <div className="filter-field">
                   <div className="filter-label">Nome</div>
                   <input className="filter-input" placeholder="Buscar por nome" value={filtroNome} onChange={e => setFiltroNome(e.target.value)} />
                 </div>
-
                 <div className="filter-field">
                   <div className="filter-label">Telefone</div>
                   <input className="filter-input" placeholder="Buscar por telefone" value={filtroTelefone} onChange={e => setFiltroTelefone(e.target.value)} />
                 </div>
-
                 <div className="filter-field">
                   <div className="filter-label">Status</div>
                   <select className="filter-select" value={filtroStatus} onChange={e => setFiltroStatus(e.target.value)}>
@@ -1150,7 +495,6 @@ export default function Painel() {
                     <option value="PENDENTE">Pendentes</option>
                   </select>
                 </div>
-
                 <div className="filter-field">
                   <div className="filter-label">Validação</div>
                   <select className="filter-select" value={filtroValidacao} onChange={e => setFiltroValidacao(e.target.value)}>
@@ -1160,21 +504,15 @@ export default function Painel() {
                     <option value="NÃO É NOTA">Não é nota</option>
                   </select>
                 </div>
-
                 <div className="filter-field">
                   <div className="filter-label">Semana salva</div>
-                  <select
-                    className="filter-select"
-                    value={semanaSelecionada}
-                    onChange={(e) => verHistorico(e.target.value)}
-                  >
+                  <select className="filter-select" value={semanaSelecionada} onChange={(e) => verHistorico(e.target.value)}>
                     <option value="">Semana atual</option>
                     {semanas.map((s) => (
                       <option key={s} value={s}>{s}</option>
                     ))}
                   </select>
                 </div>
-
                 <div className="filter-field">
                   <div className="filter-label">&nbsp;</div>
                   <div className="filters-actions">
@@ -1195,15 +533,8 @@ export default function Painel() {
               <table>
                 <thead>
                   <tr>
-                    <th>Nome</th>
-                    <th>Semana</th>
-                    <th>Valor</th>
-                    <th>Telefone</th>
-                    <th>Status</th>
-                    <th>Nota</th>
-                    <th>NFS-e</th>
-                    <th>Validação</th>
-                    <th>Ação</th>
+                    <th>Nome</th><th>Semana</th><th>Valor</th><th>Telefone</th>
+                    <th>Status</th><th>Nota</th><th>NFS-e</th><th>Validação</th><th>Ação</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1271,29 +602,18 @@ export default function Painel() {
             <div>
               <div className="modal-label">Selecione o período da semana</div>
               <div className="datepicker-wrap">
-                <DatePicker
-                  selectsRange
-                  startDate={periodoSalvar[0]}
-                  endDate={periodoSalvar[1]}
+                <DatePicker selectsRange startDate={periodoSalvar[0]} endDate={periodoSalvar[1]}
                   onChange={(update) => setPeriodoSalvar(update)}
-                  dateFormat="dd/MM/yyyy"
-                  placeholderText="Ex: 23/02/2026 a 01/03/2026"
-                  calendarStartDay={1}
-                  inline
-                />
+                  dateFormat="dd/MM/yyyy" placeholderText="Ex: 23/02/2026 a 01/03/2026"
+                  calendarStartDay={1} inline />
               </div>
             </div>
             <div className="modal-actions">
               <button className="btn-secondary" onClick={() => { setModalSalvar(false); setPeriodoSalvar([null, null]) }}>
                 <X size={13} /> Cancelar
               </button>
-              <button
-                className="btn-salvar"
-                onClick={salvarSemana}
-                disabled={!periodoSalvar[0] || !periodoSalvar[1] || salvando}
-              >
-                <Save size={13} />
-                {salvando ? "Salvando..." : "Confirmar"}
+              <button className="btn-salvar" onClick={salvarSemana} disabled={!periodoSalvar[0] || !periodoSalvar[1]}>
+                <Save size={13} /> Confirmar
               </button>
             </div>
           </div>
