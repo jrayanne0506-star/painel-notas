@@ -8,7 +8,7 @@ import {
 } from "recharts"
 import {
   Upload, X, Search, TrendingUp, TrendingDown,
-  Users, CheckCircle, Clock, AlertCircle, ChevronUp, ChevronDown, Minus
+  Users, CheckCircle, Clock, ChevronUp, ChevronDown, Minus
 } from "lucide-react"
 
 // ─── TIPOS ────────────────────────────────────────────────────────────────
@@ -96,7 +96,6 @@ export function AbaPerformance() {
   const [erro, setErro] = useState("")
   const [nomeArquivo, setNomeArquivo] = useState("")
   const [dragOver, setDragOver] = useState(false)
-  const inputRef = useRef<HTMLInputElement>(null)
 
   // Filtros
   const [filtroNome, setFiltroNome] = useState("")
@@ -226,11 +225,10 @@ export function AbaPerformance() {
           Faça upload do Excel exportado da Keeta para visualizar a performance dos entregadores
         </div>
 
-        <div
+        <label
           onDrop={onDrop}
           onDragOver={e => { e.preventDefault(); setDragOver(true) }}
           onDragLeave={() => setDragOver(false)}
-          onClick={() => inputRef.current?.click()}
           style={{
             border: `2px dashed ${dragOver ? "#FFD84D" : "rgba(255,255,255,0.12)"}`,
             borderRadius: 16,
@@ -238,6 +236,7 @@ export function AbaPerformance() {
             cursor: "pointer",
             background: dragOver ? "rgba(255,216,77,0.04)" : "rgba(255,255,255,0.02)",
             transition: "all 0.2s",
+            display: "block",
           }}
         >
           <Upload size={32} color={dragOver ? "#FFD84D" : "#444"} style={{ marginBottom: 16 }} />
@@ -246,13 +245,12 @@ export function AbaPerformance() {
           </div>
           <div style={{ fontSize: 12, color: "#444" }}>Aceita .xlsx exportado da Keeta</div>
           <input
-            ref={inputRef}
             type="file"
             accept=".xlsx,.xls"
             style={{ display: "none" }}
             onChange={e => e.target.files?.[0] && processarArquivo(e.target.files[0])}
           />
-        </div>
+        </label>
 
         {erro && (
           <div style={{ marginTop: 16, padding: "12px 16px", borderRadius: 8, background: "rgba(248,113,113,0.08)", border: "1px solid rgba(248,113,113,0.2)", color: "#f87171", fontSize: 13 }}>
