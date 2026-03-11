@@ -14,7 +14,6 @@ import DatePicker from "react-datepicker"
 import "react-datepicker/dist/react-datepicker.css"
 import { useRouter } from "next/navigation"
 
-// ─── TIPOS ─────────────────────────────────────────────────────────────────
 type StatusDespesa = "PAGO" | "PENDENTE" | "CANCELADO"
 
 interface Despesa {
@@ -34,9 +33,6 @@ interface SemanaFinanceira {
   lucro: number
 }
 
-// ─── SHEETS API ─────────────────────────────────────────────────────────────
-const SHEETS_API = process.env.NEXT_PUBLIC_SHEETS_API!
-
 async function sheetsGet(aba: string) {
   const res = await fetch(`/api/sheets?aba=${aba}`)
   return res.json()
@@ -50,7 +46,6 @@ async function sheetsPost(body: object) {
   })
 }
 
-// ─── HELPERS ────────────────────────────────────────────────────────────────
 function semanaAtual() {
   const hoje = new Date()
   const inicio = new Date(hoje)
@@ -70,7 +65,6 @@ const CATEGORIAS_DEFAULT = [
   "Impostos", "Internet", "Telefone", "Outros"
 ]
 
-// ─── COMPONENTE DESPESAS ────────────────────────────────────────────────────
 export function AbaDespesas() {
   const [despesas, setDespesas] = useState<Despesa[]>([])
   const [receitas, setReceitas] = useState<Record<string, number>>({})
@@ -78,6 +72,10 @@ export function AbaDespesas() {
   const [semanaSel, setSemanaSel] = useState(semanaAtual())
   const [categorias, setCategorias] = useState<string[]>(CATEGORIAS_DEFAULT)
   const [carregando, setCarregando] = useState(true)
+  const [erroCarregamento, setErroCarregamento] = useState("")
+
+  // ── FILTRO POR SEMANA NA TABELA
+  const [filtroSemanaTabela, setFiltroSemanaTabela] = useState("")
 
   const [formAberto, setFormAberto] = useState(false)
   const [editandoId, setEditandoId] = useState<string | null>(null)
@@ -94,29 +92,38 @@ export function AbaDespesas() {
   const [modalNovaSemana, setModalNovaSemana] = useState(false)
   const [novaSemanaInput, setNovaSemanaInput] = useState("")
 
-  // ── Carrega dados do Sheets ao montar
+  // ── CARREGAMENTO CORRIGIDO
   useEffect(() => {
     async function carregar() {
       setCarregando(true)
+      setErroCarregamento("")
       try {
         const [rawDesp, rawRec] = await Promise.all([
           sheetsGet("despesas"),
           sheetsGet("receitas"),
         ])
 
-        const desp: Despesa[] = (rawDesp || []).map((r: any) => ({
-          id: String(r.id),
-          nome: String(r.nome),
-          valor: Number(r.valor),
-          status: r.status as StatusDespesa,
-          semana: String(r.semana),
-          categoria: String(r.categoria),
-          criadaEm: String(r.criadaEm),
-        }))
+        if (rawDesp?.erro || rawRec?.erro) {
+          setErroCarregamento(rawDesp?.erro || rawRec?.erro)
+          setCarregando(false)
+          return
+        }
+
+        const desp: Despesa[] = (Array.isArray(rawDesp) ? rawDesp : [])
+          .map((r: any) => ({
+            id: String(r.id ?? ""),
+            nome: String(r.nome ?? ""),
+            valor: Number(r.valor ?? 0),
+            status: (r.status ?? "PENDENTE") as StatusDespesa,
+            semana: String(r.semana ?? ""),
+            categoria: String(r.categoria ?? ""),
+            criadaEm: String(r.criadaEm ?? new Date().toISOString()),
+          }))
+          .filter(d => d.id && d.semana)
 
         const rec: Record<string, number> = {}
-        ;(rawRec || []).forEach((r: any) => {
-          rec[String(r.semana)] = Number(r.valor)
+        ;(Array.isArray(rawRec) ? rawRec : []).forEach((r: any) => {
+          if (r.semana) rec[String(r.semana)] = Number(r.valor ?? 0)
         })
 
         setDespesas(desp)
@@ -126,8 +133,14 @@ export function AbaDespesas() {
           new Set([semanaAtual(), ...desp.map(x => x.semana)])
         ).sort().reverse()
         setSemanas(semanasUnicas)
-      } catch (e) {
-        console.error("Erro ao carregar do Sheets:", e)
+
+        if (semanasUnicas.includes(semanaAtual())) {
+          setSemanaSel(semanaAtual())
+        } else if (semanasUnicas.length > 0) {
+          setSemanaSel(semanasUnicas[0])
+        }
+      } catch (e: any) {
+        setErroCarregamento(e.message || "Erro desconhecido")
       } finally {
         setCarregando(false)
       }
@@ -135,7 +148,6 @@ export function AbaDespesas() {
     carregar()
   }, [])
 
-  // ── Derived
   const despSemana = despesas.filter(d => d.semana === semanaSel)
   const receitaSemana = receitas[semanaSel] || 0
   const totalPago = despSemana.filter(d => d.status === "PAGO").reduce((a, d) => a + d.valor, 0)
@@ -144,6 +156,16 @@ export function AbaDespesas() {
   const lucroLiquido = receitaSemana - totalDespesas
   const maiorDespesa = despSemana.filter(d => d.status !== "CANCELADO").sort((a, b) => b.valor - a.valor)[0]
 
+  // ── DESPESAS EXIBIDAS COM FILTRO
+  const despExibidas = filtroSemanaTabela
+    ? despesas.filter(d => d.semana === filtroSemanaTabela)
+    : despSemana
+
+  const totalExibidoPago = despExibidas.filter(d => d.status === "PAGO").reduce((a, d) => a + d.valor, 0)
+  const totalExibidoPendente = despExibidas.filter(d => d.status === "PENDENTE").reduce((a, d) => a + d.valor, 0)
+  const totalExibido = totalExibidoPago + totalExibidoPendente
+  const lucroExibido = (filtroSemanaTabela ? (receitas[filtroSemanaTabela] || 0) : receitaSemana) - totalExibido
+
   const dadosComparativo: SemanaFinanceira[] = semanas.slice(0, 8).reverse().map(s => {
     const ds = despesas.filter(d => d.semana === s)
     const rec = receitas[s] || 0
@@ -151,18 +173,16 @@ export function AbaDespesas() {
     return { semana: s, receita: rec, despesas: desp, lucro: rec - desp }
   })
 
-  const porCategoria = despSemana.filter(d => d.status !== "CANCELADO").reduce((acc, d) => {
+  const porCategoria = despExibidas.filter(d => d.status !== "CANCELADO").reduce((acc, d) => {
     acc[d.categoria] = (acc[d.categoria] || 0) + d.valor
     return acc
   }, {} as Record<string, number>)
   const dadosCategoria = Object.entries(porCategoria).map(([cat, val]) => ({ cat, val })).sort((a, b) => b.val - a.val)
 
-  // ── Salvar despesa (upsert)
   async function salvarDespesa(d: Despesa) {
     await sheetsPost({ aba: "despesas", acao: "upsert", dados: { id: d.id, nome: d.nome, valor: d.valor, status: d.status, semana: d.semana, categoria: d.categoria, criadaEm: d.criadaEm } })
   }
 
-  // ── Excluir despesa
   async function excluirDespesaSheets(id: string) {
     await sheetsPost({ aba: "despesas", acao: "delete", dados: { campo: "id", valor: id } })
   }
@@ -276,7 +296,7 @@ export function AbaDespesas() {
 
   function exportarCSVSemana() {
     const cabecalho = ["Nome", "Categoria", "Valor (R$)", "Status", "Semana", "Criada em"]
-    const linhas = despSemana.map(d => [
+    const linhas = despExibidas.map(d => [
       d.nome, d.categoria,
       d.valor.toFixed(2).replace(".", ","),
       d.status, d.semana,
@@ -289,7 +309,7 @@ export function AbaDespesas() {
     const url = URL.createObjectURL(blob)
     const a = document.createElement("a")
     a.href = url
-    a.download = `despesas_${semanaSel.replace(/\//g, "-")}.csv`
+    a.download = `despesas_${(filtroSemanaTabela || semanaSel).replace(/\//g, "-")}.csv`
     a.click()
     URL.revokeObjectURL(url)
   }
@@ -304,8 +324,21 @@ export function AbaDespesas() {
     return (
       <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: 300, color: "#555", fontSize: 14, gap: 12 }}>
         <RefreshCw size={16} style={{ animation: "spin 1s linear infinite" }} />
-        Carregando dados...
+        Carregando dados da planilha...
         <style>{`@keyframes spin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }`}</style>
+      </div>
+    )
+  }
+
+  if (erroCarregamento) {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: 300, color: "#f87171", fontSize: 14, gap: 12 }}>
+        <X size={20} />
+        Erro ao carregar: {erroCarregamento}
+        <button onClick={() => window.location.reload()}
+          style={{ padding: "8px 16px", borderRadius: 8, border: "1px solid rgba(248,113,113,0.3)", background: "rgba(248,113,113,0.08)", color: "#f87171", cursor: "pointer", fontFamily: "DM Sans", fontSize: 13 }}>
+          Tentar novamente
+        </button>
       </div>
     )
   }
@@ -313,13 +346,13 @@ export function AbaDespesas() {
   return (
     <div style={{ padding: "32px 40px", maxWidth: 1600, margin: "0 auto" }}>
 
-      {/* ── BARRA SEMANA + RECEITA ─────────────────────────── */}
+      {/* ── BARRA SEMANA + RECEITA */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 28, gap: 16, flexWrap: "wrap" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
           <div style={{ fontSize: 11, color: "#555", textTransform: "uppercase", letterSpacing: 1 }}>Semana</div>
           <select
             value={semanaSel}
-            onChange={e => setSemanaSel(e.target.value)}
+            onChange={e => { setSemanaSel(e.target.value); setFiltroSemanaTabela("") }}
             style={{ background: "#0f0f0f", border: "1px solid rgba(255,255,255,0.1)", color: "#fff", padding: "8px 14px", borderRadius: 8, fontFamily: "DM Sans", fontSize: 14, fontWeight: 600, outline: "none", cursor: "pointer" }}
           >
             {semanas.map(s => <option key={s} value={s}>{s}</option>)}
@@ -341,7 +374,6 @@ export function AbaDespesas() {
           </button>
         </div>
 
-        {/* Receita da semana */}
         <div style={{ display: "flex", alignItems: "center", gap: 10, background: "rgba(74,222,128,0.06)", border: "1px solid rgba(74,222,128,0.2)", borderRadius: 10, padding: "10px 16px" }}>
           <span style={{ fontSize: 11, color: "#555", textTransform: "uppercase", letterSpacing: 1 }}>Receita OL</span>
           {editandoReceita ? (
@@ -367,7 +399,7 @@ export function AbaDespesas() {
         </div>
       </div>
 
-      {/* ── KPI CARDS ──────────────────────────────────────── */}
+      {/* ── KPI CARDS */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 14, marginBottom: 28 }}>
         {[
           { label: "Receita", value: receitaSemana, color: "#4ade80", icon: <TrendingUp size={18} color="#4ade80" /> },
@@ -390,7 +422,7 @@ export function AbaDespesas() {
         ))}
       </div>
 
-      {/* ── GRÁFICOS ────────────────────────────────────────── */}
+      {/* ── GRÁFICOS */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 28 }}>
         <div style={{ background: "#0f0f0f", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 14, padding: 24 }}>
           <div style={{ fontFamily: "Syne, sans-serif", fontSize: 12, fontWeight: 700, color: "#fff", textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 20 }}>Comparativo Semanal</div>
@@ -435,15 +467,42 @@ export function AbaDespesas() {
         </div>
       )}
 
-      {/* ── LISTA DE DESPESAS ──────────────────────────────── */}
+      {/* ── LISTA DE DESPESAS */}
       <div style={{ background: "#0f0f0f", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 14, overflow: "hidden" }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "18px 24px", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "18px 24px", borderBottom: "1px solid rgba(255,255,255,0.06)", flexWrap: "wrap", gap: 12 }}>
           <div style={{ fontFamily: "Syne, sans-serif", fontSize: 13, fontWeight: 700, color: "#fff", textTransform: "uppercase", letterSpacing: 1.5 }}>
-            Despesas — {semanaSel}
+            Despesas {filtroSemanaTabela ? `— ${filtroSemanaTabela}` : `— ${semanaSel}`}
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+
+            {/* ── FILTRO POR SEMANA NA TABELA */}
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <Search size={13} color="#555" />
+              <select
+                value={filtroSemanaTabela}
+                onChange={e => setFiltroSemanaTabela(e.target.value)}
+                style={{
+                  background: "#161616",
+                  border: `1px solid ${filtroSemanaTabela ? "rgba(255,216,77,0.4)" : "rgba(255,255,255,0.1)"}`,
+                  color: filtroSemanaTabela ? "#FFD84D" : "#666",
+                  padding: "6px 12px", borderRadius: 8, fontFamily: "DM Sans",
+                  fontSize: 12, fontWeight: 600, outline: "none", cursor: "pointer"
+                }}
+              >
+                <option value="">Semana selecionada</option>
+                {semanas.map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
+              {filtroSemanaTabela && (
+                <button onClick={() => setFiltroSemanaTabela("")}
+                  title="Limpar filtro"
+                  style={{ background: "none", border: "none", color: "#555", cursor: "pointer", display: "flex", padding: 4 }}>
+                  <X size={13} />
+                </button>
+              )}
+            </div>
+
             <span style={{ fontSize: 12, color: "#555", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.07)", padding: "4px 10px", borderRadius: 20 }}>
-              {despSemana.length} item{despSemana.length !== 1 ? "s" : ""}
+              {despExibidas.length} item{despExibidas.length !== 1 ? "s" : ""}
             </span>
             <button onClick={() => abrirForm()}
               style={{ display: "flex", alignItems: "center", gap: 7, padding: "8px 16px", borderRadius: 8, border: "none", background: "linear-gradient(135deg, #7b1fa2, #9c27b0)", color: "#fff", fontFamily: "DM Sans", fontSize: 13, fontWeight: 600, cursor: "pointer", transition: "all 0.2s" }}
@@ -519,15 +578,15 @@ export function AbaDespesas() {
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead>
               <tr style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
-                {["Nome", "Categoria", "Valor", "Status", "Ações"].map(h => (
+                {["Nome", "Categoria", "Valor", "Status", "Semana", "Ações"].map(h => (
                   <th key={h} style={{ padding: "12px 20px", textAlign: "left", fontSize: 11, color: "#555", textTransform: "uppercase", letterSpacing: 1, fontWeight: 500 }}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {despSemana.length === 0 ? (
-                <tr><td colSpan={5} style={{ padding: "40px 20px", textAlign: "center", color: "#333", fontSize: 14 }}>Nenhuma despesa registrada para esta semana</td></tr>
-              ) : despSemana.map(d => {
+              {despExibidas.length === 0 ? (
+                <tr><td colSpan={6} style={{ padding: "40px 20px", textAlign: "center", color: "#333", fontSize: 14 }}>Nenhuma despesa registrada para esta semana</td></tr>
+              ) : despExibidas.map(d => {
                 const sc = statusConfig[d.status]
                 return (
                   <tr key={d.id} style={{ borderBottom: "1px solid rgba(255,255,255,0.04)", opacity: d.status === "CANCELADO" ? 0.4 : 1 }}
@@ -548,6 +607,7 @@ export function AbaDespesas() {
                         <option value="CANCELADO">✗ Cancelado</option>
                       </select>
                     </td>
+                    <td style={{ padding: "14px 20px", fontSize: 12, color: "#666" }}>{d.semana}</td>
                     <td style={{ padding: "14px 20px" }}>
                       <div style={{ display: "flex", gap: 8 }}>
                         <button onClick={() => abrirForm(d)}
@@ -568,15 +628,16 @@ export function AbaDespesas() {
                 )
               })}
             </tbody>
-            {despSemana.length > 0 && (
+            {despExibidas.length > 0 && (
               <tfoot>
                 <tr style={{ borderTop: "1px solid rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.02)" }}>
                   <td colSpan={2} style={{ padding: "12px 20px", fontSize: 12, color: "#555", textTransform: "uppercase", letterSpacing: 1 }}>Total</td>
                   <td style={{ padding: "12px 20px", fontFamily: "Syne, sans-serif", fontSize: 16, fontWeight: 700, color: "#f87171" }}>
-                    R$ {totalDespesas.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                    R$ {totalExibido.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
                   </td>
-                  <td colSpan={2} style={{ padding: "12px 20px", fontSize: 13, color: lucroLiquido >= 0 ? "#4ade80" : "#f87171", fontWeight: 600 }}>
-                    Lucro: R$ {lucroLiquido.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                  <td colSpan={3} style={{ padding: "12px 20px", fontSize: 13, color: lucroExibido >= 0 ? "#4ade80" : "#f87171", fontWeight: 600 }}>
+                    Lucro: R$ {lucroExibido.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                    {filtroSemanaTabela && <span style={{ marginLeft: 12, fontSize: 11, color: "#FFD84D", fontWeight: 400 }}>filtro: {filtroSemanaTabela}</span>}
                   </td>
                 </tr>
               </tfoot>
@@ -651,7 +712,8 @@ export default function Painel() {
     try {
       const resNotas = await fetch(`/api/notas?t=${Date.now()}`, { method: "GET", cache: "no-store", headers: { "Cache-Control": "no-cache, no-store, must-revalidate", "Pragma": "no-cache" } })
       if (!resNotas.ok) throw new Error("Erro ao buscar notas")
-      setDados(Array.isArray(await resNotas.json()) ? await resNotas.json() : [])
+      const json = await resNotas.json()
+      setDados(Array.isArray(json) ? json : [])
       setMsgSalvar("✓ Sincronização concluída com sucesso!")
     } catch (e: any) { setMsgSalvar(`✗ Erro: ${e.message}`) }
     finally { setSincronizando(false); setTimeout(() => setMsgSalvar(""), 5000) }
