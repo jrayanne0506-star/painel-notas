@@ -55,15 +55,13 @@ export async function buscarNotasCruzadas() {
   }
 
   // Monta mapa de quem JÁ enviou nota (pelo nome)
-  // IMPORTANTE: guarda TODOS os registros por nome (pode haver mais de um envio do mesmo nome)
-  // Usamos um array por nome e pegamos o mais recente (último)
   const mapaNotas: Record<string, any> = {}
   rowsNotas.slice(1).forEach((row: any, i: number) => {
     const nome = (row[1] ?? "").toString().trim().toLowerCase()
     if (!nome) return
 
     const linhaSheet = i + 2 // linha real na planilha (começa em 2 por causa do cabeçalho)
-    
+
     // Se já existe entrada para esse nome, mantém a mais recente (maior linha)
     const existente = mapaNotas[nome]
     if (!existente || linhaSheet > Number(existente.id)) {
@@ -105,11 +103,20 @@ export async function buscarNotasCruzadas() {
 }
 
 export async function salvarResultadoNoSheets(linhaSheet: number, numeroNfse: string, statusValidacao: string) {
-  await sheets.spreadsheets.values.update({
-    spreadsheetId: SHEET_NOTAS_ID,
-    range: `G${linhaSheet}:H${linhaSheet}`,
-    valueInputOption: "RAW",
-    requestBody: { values: [[numeroNfse, statusValidacao]] },
-  })
+  console.log(`💾 Tentando salvar na linha ${linhaSheet}: NFS-e=${numeroNfse} | Status=${statusValidacao}`)
+
+  try {
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: SHEET_NOTAS_ID,
+      range: `G${linhaSheet}:H${linhaSheet}`,
+      valueInputOption: "RAW",
+      requestBody: { values: [[numeroNfse, statusValidacao]] },
+    })
+    console.log(`✅ Salvo com sucesso na linha ${linhaSheet}`)
+  } catch (err: any) {
+    console.error(`❌ ERRO ao salvar na linha ${linhaSheet}:`, err.message)
+    throw err
+  }
+
   invalidarCache()
 }

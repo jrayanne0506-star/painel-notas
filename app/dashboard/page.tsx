@@ -116,7 +116,7 @@ export default function Painel() {
 
       // 2️⃣ Identifica as pendentes
       const pendentes = novasNotas.filter((n: any) =>
-        n.link && (!n.numeroNfse || n.numeroNfse === "" || n.numeroNfse === "NÃO ENCONTRADO" || n.numeroNfse === "ERRO" || !n.statusValidacao || n.statusValidacao === "")
+       n.link && (!n.numeroNfse || n.numeroNfse === "" || n.numeroNfse === "NÃO ENCONTRADO" || n.numeroNfse === "ERRO" || n.statusValidacao === "NÃO É NOTA" || n.statusValidacao === "")
       )
 
       console.log("⏳ Notas pendentes para processar:", pendentes.length)
