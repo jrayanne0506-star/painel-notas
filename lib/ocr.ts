@@ -1,5 +1,30 @@
 import fetch from "node-fetch"
 
+// ✅ Polyfill para DOMMatrix — necessário no Node.js (Vercel não tem essa API do browser)
+if (typeof globalThis.DOMMatrix === "undefined") {
+  ;(globalThis as any).DOMMatrix = class DOMMatrix {
+    a = 1; b = 0; c = 0; d = 1; e = 0; f = 0
+    m11 = 1; m12 = 0; m13 = 0; m14 = 0
+    m21 = 0; m22 = 1; m23 = 0; m24 = 0
+    m31 = 0; m32 = 0; m33 = 1; m34 = 0
+    m41 = 0; m42 = 0; m43 = 0; m44 = 1
+    is2D = true; isIdentity = true
+    constructor(_init?: string | number[]) {}
+    static fromMatrix() { return new DOMMatrix() }
+    static fromFloat32Array() { return new DOMMatrix() }
+    static fromFloat64Array() { return new DOMMatrix() }
+    multiply() { return new DOMMatrix() }
+    translate() { return new DOMMatrix() }
+    scale() { return new DOMMatrix() }
+    rotate() { return new DOMMatrix() }
+    inverse() { return new DOMMatrix() }
+    transformPoint(p?: any) { return p ?? { x: 0, y: 0, z: 0, w: 1 } }
+    toFloat32Array() { return new Float32Array(16) }
+    toFloat64Array() { return new Float64Array(16) }
+    toJSON() { return {} }
+  }
+}
+
 async function baixarArquivo(link: string): Promise<Buffer> {
   const idMatch = link.match(/\/d\/([a-zA-Z0-9_-]+)/)
   if (!idMatch) throw new Error("Link inválido")
@@ -34,7 +59,7 @@ export async function lerNotaLocal(link: string, valorEsperado: string) {
   console.log("\n====== INICIANDO PROCESSAMENTO ======")
   console.log("Link:", link)
   console.log("Valor esperado:", valorEsperado)
-  
+
   let buffer: Buffer
   try {
     buffer = await baixarArquivo(link)
@@ -89,20 +114,17 @@ export async function lerNotaLocal(link: string, valorEsperado: string) {
   // ==================== BUSCA DO NÚMERO NFS-e ====================
   let numeroNfse = "não encontrado"
 
-  // ✅ BUG #1 CORRIGIDO: Regex melhorada que aceita variações
   const nfseMatch = textoUnico.match(/N[úu]mero\s+da\s+NFS[\s\-]*e[\s:]*(\d+)/i)
   if (nfseMatch) {
     numeroNfse = nfseMatch[1]
     console.log("✓ Número NFS-e encontrado via REGEX PRINCIPAL:", numeroNfse)
   } else {
     console.log("⚠️  Regex principal não encontrou - tentando busca em linhas...")
-    
-    // ✅ BUG #2 CORRIGIDO: Busca mais flexível em linhas
+
     for (let i = 0; i < linhas.length; i++) {
       if (/N[úu]mero\s+da\s+NFS[\s\-]*e/i.test(linhas[i])) {
         console.log(`  Linha ${i} contém "Número da NFS-e": "${linhas[i]}"`)
-        
-        // Tenta extrair número da mesma linha
+
         const m = linhas[i].match(/(\d{2,6})/)
         if (m) {
           numeroNfse = m[1]
@@ -110,7 +132,6 @@ export async function lerNotaLocal(link: string, valorEsperado: string) {
           break
         }
 
-        // Procura nas próximas 2 linhas
         for (let j = i + 1; j < Math.min(i + 3, linhas.length); j++) {
           console.log(`  Checking linha ${j}: "${linhas[j]}"`)
           const m2 = linhas[j].match(/^(\d{2,6})/)
@@ -125,7 +146,6 @@ export async function lerNotaLocal(link: string, valorEsperado: string) {
     }
   }
 
-  // ✅ BUG #3 CORRIGIDO: Fallback adicional se ainda não encontrou
   if (numeroNfse === "não encontrado") {
     console.log("⚠️  Tentando FALLBACK - procurando número próximo a data...")
     const fallback = textoUnico.match(/\b(\d{2,6})\s+10\/03\/2026/)
@@ -139,18 +159,18 @@ export async function lerNotaLocal(link: string, valorEsperado: string) {
 
   // ==================== BUSCA DO VALOR ====================
   let valorDetectado = "não encontrado"
-  
+
   const valorMatch = textoUnico.match(/Valor\s+L[íi]quido\s+da\s+NFS[\s\-]*e[\s:]*R\$\s*([\d.,]+)/i)
   if (valorMatch) {
     valorDetectado = valorMatch[1].trim()
     console.log("✓ Valor encontrado via REGEX:", valorDetectado)
   } else {
     console.log("⚠️  Regex de valor não funcionou - buscando em linhas...")
-    
+
     for (let i = 0; i < linhas.length; i++) {
       if (/Valor\s+L[íi]quido\s+da\s+NFS[\s\-]*e/i.test(linhas[i])) {
         console.log(`  Linha ${i} contém "Valor Líquido": "${linhas[i]}"`)
-        
+
         for (let j = i + 1; j < Math.min(i + 5, linhas.length); j++) {
           const m = linhas[j].match(/R\$\s*([\d.,]+)/)
           if (m) {
