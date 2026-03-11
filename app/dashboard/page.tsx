@@ -38,13 +38,15 @@ interface SemanaFinanceira {
 const SHEETS_API = process.env.NEXT_PUBLIC_SHEETS_API!
 
 async function sheetsGet(aba: string) {
-  const res = await fetch(`${SHEETS_API}?aba=${aba}`)
+  const res = await fetch(`${SHEETS_API}?aba=${aba}`, { redirect: "follow" })
   return res.json()
 }
 
 async function sheetsPost(body: object) {
   await fetch(SHEETS_API, {
     method: "POST",
+    redirect: "follow",
+    headers: { "Content-Type": "text/plain" },
     body: JSON.stringify(body),
   })
 }
