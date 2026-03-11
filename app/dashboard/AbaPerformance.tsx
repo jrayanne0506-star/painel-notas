@@ -11,7 +11,6 @@ import {
   Users, CheckCircle, Clock, ChevronUp, ChevronDown, Minus
 } from "lucide-react"
 
-// ─── TIPOS ────────────────────────────────────────────────────────────────
 interface EntregadorDia {
   data: string
   id: string
@@ -32,11 +31,33 @@ interface EntregadorDia {
   compareceu: string
 }
 
-// ─── UTILS ─────────────────────────────────────────────────────────────────
 function toNum(v: any): number {
   if (v === null || v === undefined || v === "-" || v === "") return 0
   const n = Number(v)
   return isNaN(n) ? 0 : n
+}
+
+// Converte data do Excel — pode vir como 20260228, 20260228.0, serial numérico ou string
+function parseData(v: any): string {
+  if (!v && v !== 0) return ""
+  const s = String(v).replace(".0", "").trim()
+
+  // Formato YYYYMMDD (ex: 20260228)
+  if (/^\d{8}$/.test(s)) {
+    return `${s.slice(6, 8)}/${s.slice(4, 6)}/${s.slice(0, 4)}`
+  }
+
+  // Serial numérico do Excel (ex: 46710) — converte via XLSX
+  const n = Number(s)
+  if (!isNaN(n) && n > 40000 && n < 60000) {
+    const date = XLSX.SSF.parse_date_code(n)
+    const dd = String(date.d).padStart(2, "0")
+    const mm = String(date.m).padStart(2, "0")
+    return `${dd}/${mm}/${date.y}`
+  }
+
+  // Já é string de data (DD/MM/YYYY ou similar)
+  return s
 }
 
 function pct(v: number) {
@@ -50,28 +71,29 @@ function avg(arr: number[]) {
 
 type SortKey = "nome" | "entregues" | "aceitas" | "canceladas" | "taxaPontualidade" | "tempoMedioEntrega" | "tempoOnline"
 
-// ─── PARSER DO EXCEL ──────────────────────────────────────────────────────
 function parseExcel(file: File): Promise<EntregadorDia[]> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader()
     reader.onload = (e) => {
       try {
         const data = new Uint8Array(e.target!.result as ArrayBuffer)
-        const wb = XLSX.read(data, { type: "array" })
+        const wb = XLSX.read(data, { type: "array", cellDates: false })
         const ws = wb.Sheets[wb.SheetNames[0]]
         const rows: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null })
 
+        console.log("Total linhas:", rows.length)
+        console.log("Linha 2 amostra:", rows[2]?.slice(0, 6))
+
         const parsed: EntregadorDia[] = []
-        // linhas 0 e 1 são cabeçalho, dados começam na linha 2
         for (let i = 2; i < rows.length; i++) {
           const r = rows[i]
-          if (!r[0] || !r[2]) continue
+          if (!r || r[0] === null || r[0] === undefined || !r[2]) continue
 
-          const dataStr = String(r[0]).replace(".0", "")
-          const fmt = `${dataStr.slice(6, 8)}/${dataStr.slice(4, 6)}/${dataStr.slice(0, 4)}`
+          const dataFmt = parseData(r[0])
+          if (!dataFmt) continue
 
           parsed.push({
-            data: fmt,
+            data: dataFmt,
             id: String(r[1] ?? ""),
             nome: `${String(r[2] ?? "").trim()} ${String(r[3] ?? "").trim()}`.trim(),
             bloco: String(r[4] ?? ""),
@@ -90,6 +112,8 @@ function parseExcel(file: File): Promise<EntregadorDia[]> {
             muitoAtrasado: toNum(r[25]),
           })
         }
+
+        console.log("Registros parseados:", parsed.length)
         resolve(parsed)
       } catch (err) {
         reject(err)
@@ -100,7 +124,6 @@ function parseExcel(file: File): Promise<EntregadorDia[]> {
   })
 }
 
-// ─── COMPONENTE PRINCIPAL ─────────────────────────────────────────────────
 export function AbaPerformance() {
   const [dados, setDados] = useState<EntregadorDia[]>([])
   const [carregando, setCarregando] = useState(false)
@@ -123,7 +146,7 @@ export function AbaPerformance() {
     try {
       const parsed = await parseExcel(file)
       if (parsed.length === 0) {
-        setErro("Nenhum dado encontrado no arquivo. Verifique se é o Excel correto da Keeta.")
+        setErro("Nenhum dado encontrado. Abra o console (F12) para ver detalhes do arquivo.")
         return
       }
       setDados(parsed)
@@ -191,16 +214,11 @@ export function AbaPerformance() {
     const canceladas = total.reduce((a, d) => a + d.canceladas, 0)
     const recusadas = total.reduce((a, d) => a + d.recusadas, 0)
     const pontualidades = total.filter(d => d.taxaPontualidade > 0).map(d => d.taxaPontualidade)
-    const tempos = total.filter(d => d.tempoMedioEntrega > 0).map(d => d.tempoMedioEntrega)
     return {
       entregadores: new Set(total.map(d => d.nome)).size,
-      entregues,
-      aceitas,
-      canceladas,
-      recusadas,
+      entregues, aceitas, canceladas, recusadas,
       txEntrega: aceitas ? entregues / aceitas : 0,
       txPontualidade: avg(pontualidades),
-      tempoMedio: avg(tempos),
     }
   }, [dadosFiltradosData])
 
@@ -208,7 +226,7 @@ export function AbaPerformance() {
     return [...listaFiltrada]
       .sort((a, b) => b.entregues - a.entregues)
       .slice(0, 10)
-      .map(e => ({ nome: e.nome.split(" ")[0], entregues: e.entregues, pontualidade: Math.round(e.taxaPontualidade * 100) }))
+      .map(e => ({ nome: e.nome.split(" ")[0], entregues: e.entregues }))
   }, [listaFiltrada])
 
   function toggleSort(key: SortKey) {
@@ -221,7 +239,6 @@ export function AbaPerformance() {
     return sortDir === "desc" ? <ChevronDown size={11} color="#FFD84D" /> : <ChevronUp size={11} color="#FFD84D" />
   }
 
-  // ── TELA DE UPLOAD ──────────────────────────────────────────────────────
   if (!dados.length) {
     return (
       <div style={{ padding: "60px 40px", maxWidth: 600, margin: "0 auto", textAlign: "center" }}>
@@ -269,11 +286,9 @@ export function AbaPerformance() {
     )
   }
 
-  // ── DASHBOARD ───────────────────────────────────────────────────────────
   return (
     <div style={{ padding: "32px 40px", maxWidth: 1600, margin: "0 auto" }}>
 
-      {/* ── BARRA SUPERIOR */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 28, flexWrap: "wrap", gap: 12 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <div style={{ fontSize: 11, color: "#555", textTransform: "uppercase", letterSpacing: 1 }}>Arquivo</div>
@@ -287,7 +302,6 @@ export function AbaPerformance() {
             <X size={12} /> Trocar arquivo
           </button>
         </div>
-
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <div style={{ fontSize: 11, color: "#555", textTransform: "uppercase", letterSpacing: 1 }}>Data</div>
           <select
@@ -306,7 +320,6 @@ export function AbaPerformance() {
         </div>
       </div>
 
-      {/* ── KPI CARDS */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 12, marginBottom: 28 }}>
         {[
           { label: "Entregadores", value: kpis.entregadores, color: "#ce93d8", icon: <Users size={16} color="#ce93d8" />, fmt: "num" },
@@ -330,7 +343,6 @@ export function AbaPerformance() {
         ))}
       </div>
 
-      {/* ── GRÁFICO TOP 10 */}
       <div style={{ background: "#0f0f0f", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 14, padding: 24, marginBottom: 24 }}>
         <div style={{ fontFamily: "Syne, sans-serif", fontSize: 12, fontWeight: 700, color: "#fff", textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 20 }}>
           Top 10 — Tarefas Entregues
@@ -342,9 +354,9 @@ export function AbaPerformance() {
             <YAxis tick={{ fill: "#444", fontSize: 10 }} axisLine={false} tickLine={false} />
             <Tooltip
               contentStyle={{ background: "#1a1a1a", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, fontFamily: "DM Sans", fontSize: 12 }}
-              formatter={(v: any, name: any) => [name === "entregues" ? v : `${v}%`, name === "entregues" ? "Entregues" : "Pontualidade"]}
+              formatter={(v: any) => [v, "Entregues"]}
             />
-            <Bar dataKey="entregues" name="entregues" radius={[4, 4, 0, 0]}>
+            <Bar dataKey="entregues" radius={[4, 4, 0, 0]}>
               {top10.map((_, i) => (
                 <Cell key={i} fill={i === 0 ? "#FFD84D" : i === 1 ? "#ce93d8" : i === 2 ? "#90caf9" : "#4ade80"} />
               ))}
@@ -353,7 +365,6 @@ export function AbaPerformance() {
         </ResponsiveContainer>
       </div>
 
-      {/* ── TABELA */}
       <div style={{ background: "#0f0f0f", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 14, overflow: "hidden" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "18px 24px", borderBottom: "1px solid rgba(255,255,255,0.06)", flexWrap: "wrap", gap: 12 }}>
           <div style={{ fontFamily: "Syne, sans-serif", fontSize: 13, fontWeight: 700, color: "#fff", textTransform: "uppercase", letterSpacing: 1.5 }}>
