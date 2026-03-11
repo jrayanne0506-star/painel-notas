@@ -1,5 +1,5 @@
 import fetch from "node-fetch"
-import * as pdfParse from "pdf-parse"
+const pdfParse = require("pdf-parse")
 
 async function baixarArquivo(link: string): Promise<Buffer> {
   const idMatch = link.match(/\/d\/([a-zA-Z0-9_-]+)/)
