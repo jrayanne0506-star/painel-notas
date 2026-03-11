@@ -7,14 +7,16 @@ import {
 import {
   Users, CheckCircle, AlertCircle, DollarSign, LogOut,
   Search, X, Download, Save, BarChart2, RefreshCw,
-  Plus, Trash2, Edit2, Check, TrendingUp, TrendingDown, Wallet
+  Plus, Trash2, Edit2, Check, TrendingUp, TrendingDown, Wallet, Receipt
 } from "lucide-react"
 import { useEffect, useState } from "react"
 import DatePicker from "react-datepicker"
 import "react-datepicker/dist/react-datepicker.css"
 import { useRouter } from "next/navigation"
+import { AbaPerformance } from "./AbaPerformance"
 
 type StatusDespesa = "PAGO" | "PENDENTE" | "CANCELADO"
+type Aba = "notas" | "despesas" | "performance"
 
 interface Despesa {
   id: string
@@ -73,10 +75,7 @@ export function AbaDespesas() {
   const [categorias, setCategorias] = useState<string[]>(CATEGORIAS_DEFAULT)
   const [carregando, setCarregando] = useState(true)
   const [erroCarregamento, setErroCarregamento] = useState("")
-
-  // ── FILTRO POR SEMANA NA TABELA
   const [filtroSemanaTabela, setFiltroSemanaTabela] = useState("")
-
   const [formAberto, setFormAberto] = useState(false)
   const [editandoId, setEditandoId] = useState<string | null>(null)
   const [formNome, setFormNome] = useState("")
@@ -85,14 +84,11 @@ export function AbaDespesas() {
   const [formStatus, setFormStatus] = useState<StatusDespesa>("PENDENTE")
   const [novaCategoria, setNovaCategoria] = useState("")
   const [mostrarNovaCategoria, setMostrarNovaCategoria] = useState(false)
-
   const [editandoReceita, setEditandoReceita] = useState(false)
   const [inputReceita, setInputReceita] = useState("")
-
   const [modalNovaSemana, setModalNovaSemana] = useState(false)
   const [novaSemanaInput, setNovaSemanaInput] = useState("")
 
-  // ── CARREGAMENTO CORRIGIDO
   useEffect(() => {
     async function carregar() {
       setCarregando(true)
@@ -102,13 +98,11 @@ export function AbaDespesas() {
           sheetsGet("despesas"),
           sheetsGet("receitas"),
         ])
-
         if (rawDesp?.erro || rawRec?.erro) {
           setErroCarregamento(rawDesp?.erro || rawRec?.erro)
           setCarregando(false)
           return
         }
-
         const desp: Despesa[] = (Array.isArray(rawDesp) ? rawDesp : [])
           .map((r: any) => ({
             id: String(r.id ?? ""),
@@ -120,20 +114,16 @@ export function AbaDespesas() {
             criadaEm: String(r.criadaEm ?? new Date().toISOString()),
           }))
           .filter(d => d.id && d.semana)
-
         const rec: Record<string, number> = {}
         ;(Array.isArray(rawRec) ? rawRec : []).forEach((r: any) => {
           if (r.semana) rec[String(r.semana)] = Number(r.valor ?? 0)
         })
-
         setDespesas(desp)
         setReceitas(rec)
-
         const semanasUnicas = Array.from(
           new Set([semanaAtual(), ...desp.map(x => x.semana)])
         ).sort().reverse()
         setSemanas(semanasUnicas)
-
         if (semanasUnicas.includes(semanaAtual())) {
           setSemanaSel(semanaAtual())
         } else if (semanasUnicas.length > 0) {
@@ -155,24 +145,17 @@ export function AbaDespesas() {
   const totalDespesas = totalPago + totalPendente
   const lucroLiquido = receitaSemana - totalDespesas
   const maiorDespesa = despSemana.filter(d => d.status !== "CANCELADO").sort((a, b) => b.valor - a.valor)[0]
-
-  // ── DESPESAS EXIBIDAS COM FILTRO
-  const despExibidas = filtroSemanaTabela
-    ? despesas.filter(d => d.semana === filtroSemanaTabela)
-    : despSemana
-
+  const despExibidas = filtroSemanaTabela ? despesas.filter(d => d.semana === filtroSemanaTabela) : despSemana
   const totalExibidoPago = despExibidas.filter(d => d.status === "PAGO").reduce((a, d) => a + d.valor, 0)
   const totalExibidoPendente = despExibidas.filter(d => d.status === "PENDENTE").reduce((a, d) => a + d.valor, 0)
   const totalExibido = totalExibidoPago + totalExibidoPendente
   const lucroExibido = (filtroSemanaTabela ? (receitas[filtroSemanaTabela] || 0) : receitaSemana) - totalExibido
-
   const dadosComparativo: SemanaFinanceira[] = semanas.slice(0, 8).reverse().map(s => {
     const ds = despesas.filter(d => d.semana === s)
     const rec = receitas[s] || 0
     const desp = ds.filter(d => d.status !== "CANCELADO").reduce((a, d) => a + d.valor, 0)
     return { semana: s, receita: rec, despesas: desp, lucro: rec - desp }
   })
-
   const porCategoria = despExibidas.filter(d => d.status !== "CANCELADO").reduce((acc, d) => {
     acc[d.categoria] = (acc[d.categoria] || 0) + d.valor
     return acc
@@ -182,103 +165,67 @@ export function AbaDespesas() {
   async function salvarDespesa(d: Despesa) {
     await sheetsPost({ aba: "despesas", acao: "upsert", dados: { id: d.id, nome: d.nome, valor: d.valor, status: d.status, semana: d.semana, categoria: d.categoria, criadaEm: d.criadaEm } })
   }
-
   async function excluirDespesaSheets(id: string) {
     await sheetsPost({ aba: "despesas", acao: "delete", dados: { campo: "id", valor: id } })
   }
-
   function atualizarSemanas(lista: Despesa[]) {
     const s = Array.from(new Set([semanaAtual(), semanaSel, ...lista.map(x => x.semana)])).sort().reverse()
     setSemanas(s)
   }
-
   function abrirForm(d?: Despesa) {
     if (d) {
-      setEditandoId(d.id)
-      setFormNome(d.nome)
-      setFormValor(String(d.valor))
-      setFormCategoria(d.categoria)
-      setFormStatus(d.status)
+      setEditandoId(d.id); setFormNome(d.nome); setFormValor(String(d.valor)); setFormCategoria(d.categoria); setFormStatus(d.status)
     } else {
-      setEditandoId(null)
-      setFormNome("")
-      setFormValor("")
-      setFormCategoria(categorias[0])
-      setFormStatus("PENDENTE")
+      setEditandoId(null); setFormNome(""); setFormValor(""); setFormCategoria(categorias[0]); setFormStatus("PENDENTE")
     }
     setFormAberto(true)
   }
-
   async function confirmarForm() {
     if (!formNome.trim() || !formValor) return
     const val = parseFloat(formValor.replace(",", "."))
     if (isNaN(val)) return
-
     if (editandoId) {
-      const novas = despesas.map(d => d.id === editandoId
-        ? { ...d, nome: formNome.trim(), valor: val, categoria: formCategoria, status: formStatus }
-        : d)
-      setDespesas(novas)
-      atualizarSemanas(novas)
+      const novas = despesas.map(d => d.id === editandoId ? { ...d, nome: formNome.trim(), valor: val, categoria: formCategoria, status: formStatus } : d)
+      setDespesas(novas); atualizarSemanas(novas)
       const atualizada = novas.find(d => d.id === editandoId)!
       await salvarDespesa(atualizada)
     } else {
-      const nova: Despesa = {
-        id: gerarId(), nome: formNome.trim(), valor: val,
-        status: formStatus, semana: semanaSel,
-        categoria: formCategoria, criadaEm: new Date().toISOString()
-      }
+      const nova: Despesa = { id: gerarId(), nome: formNome.trim(), valor: val, status: formStatus, semana: semanaSel, categoria: formCategoria, criadaEm: new Date().toISOString() }
       const novas = [...despesas, nova]
-      setDespesas(novas)
-      atualizarSemanas(novas)
+      setDespesas(novas); atualizarSemanas(novas)
       await salvarDespesa(nova)
     }
     setFormAberto(false)
   }
-
   async function excluir(id: string) {
     const novas = despesas.filter(d => d.id !== id)
-    setDespesas(novas)
-    atualizarSemanas(novas)
+    setDespesas(novas); atualizarSemanas(novas)
     await excluirDespesaSheets(id)
   }
-
   async function alterarStatus(id: string, status: StatusDespesa) {
     const novas = despesas.map(d => d.id === id ? { ...d, status } : d)
     setDespesas(novas)
     const atualizada = novas.find(d => d.id === id)!
     await salvarDespesa(atualizada)
   }
-
   async function salvarReceita() {
     const val = parseFloat(inputReceita.replace(",", "."))
     if (isNaN(val)) return
     const novas = { ...receitas, [semanaSel]: val }
-    setReceitas(novas)
-    setEditandoReceita(false)
+    setReceitas(novas); setEditandoReceita(false)
     await sheetsPost({ aba: "receitas", acao: "upsert-receita", dados: { semana: semanaSel, valor: val } })
   }
-
   function adicionarCategoria() {
     if (!novaCategoria.trim()) return
     const nova = novaCategoria.trim()
-    if (!categorias.includes(nova)) {
-      setCategorias([...categorias, nova])
-      setFormCategoria(nova)
-    }
-    setNovaCategoria("")
-    setMostrarNovaCategoria(false)
+    if (!categorias.includes(nova)) { setCategorias([...categorias, nova]); setFormCategoria(nova) }
+    setNovaCategoria(""); setMostrarNovaCategoria(false)
   }
-
   function criarSemana() {
     if (!novaSemanaInput.trim()) return
     const s = Array.from(new Set([novaSemanaInput.trim(), ...semanas])).sort().reverse()
-    setSemanas(s)
-    setSemanaSel(novaSemanaInput.trim())
-    setModalNovaSemana(false)
-    setNovaSemanaInput("")
+    setSemanas(s); setSemanaSel(novaSemanaInput.trim()); setModalNovaSemana(false); setNovaSemanaInput("")
   }
-
   async function excluirSemana() {
     if (!window.confirm(`Excluir a semana "${semanaSel}" e todas as suas despesas?`)) return
     const novasDespesas = despesas.filter(d => d.semana !== semanaSel)
@@ -288,118 +235,67 @@ export function AbaDespesas() {
     setReceitas(novasReceitas)
     const novasSemanas = semanas.filter(s => s !== semanaSel)
     const lista = novasSemanas.length ? novasSemanas : [semanaAtual()]
-    setSemanas(lista)
-    setSemanaSel(lista[0])
+    setSemanas(lista); setSemanaSel(lista[0])
     await sheetsPost({ aba: "despesas", acao: "delete-semana", dados: { semana: semanaSel } })
     await sheetsPost({ aba: "receitas", acao: "delete", dados: { campo: "semana", valor: semanaSel } })
   }
-
   function exportarCSVSemana() {
     const cabecalho = ["Nome", "Categoria", "Valor (R$)", "Status", "Semana", "Criada em"]
-    const linhas = despExibidas.map(d => [
-      d.nome, d.categoria,
-      d.valor.toFixed(2).replace(".", ","),
-      d.status, d.semana,
-      new Date(d.criadaEm).toLocaleString("pt-BR")
-    ])
-    const conteudo = [cabecalho, ...linhas]
-      .map(row => row.map(v => `"${String(v).replace(/"/g, '""')}"`).join(","))
-      .join("\n")
+    const linhas = despExibidas.map(d => [d.nome, d.categoria, d.valor.toFixed(2).replace(".", ","), d.status, d.semana, new Date(d.criadaEm).toLocaleString("pt-BR")])
+    const conteudo = [cabecalho, ...linhas].map(row => row.map(v => `"${String(v).replace(/"/g, '""')}"`).join(",")).join("\n")
     const blob = new Blob(["\uFEFF" + conteudo], { type: "text/csv;charset=utf-8;" })
     const url = URL.createObjectURL(blob)
-    const a = document.createElement("a")
-    a.href = url
-    a.download = `despesas_${(filtroSemanaTabela || semanaSel).replace(/\//g, "-")}.csv`
-    a.click()
+    const a = document.createElement("a"); a.href = url; a.download = `despesas_${(filtroSemanaTabela || semanaSel).replace(/\//g, "-")}.csv`; a.click()
     URL.revokeObjectURL(url)
   }
-
   const statusConfig = {
     PAGO: { label: "Pago", bg: "rgba(74,222,128,0.1)", color: "#4ade80", border: "rgba(74,222,128,0.25)" },
     PENDENTE: { label: "Pendente", bg: "rgba(251,191,36,0.1)", color: "#fbbf24", border: "rgba(251,191,36,0.25)" },
     CANCELADO: { label: "Cancelado", bg: "rgba(248,113,113,0.1)", color: "#f87171", border: "rgba(248,113,113,0.25)" },
   }
 
-  if (carregando) {
-    return (
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: 300, color: "#555", fontSize: 14, gap: 12 }}>
-        <RefreshCw size={16} style={{ animation: "spin 1s linear infinite" }} />
-        Carregando dados da planilha...
-        <style>{`@keyframes spin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }`}</style>
-      </div>
-    )
-  }
-
-  if (erroCarregamento) {
-    return (
-      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: 300, color: "#f87171", fontSize: 14, gap: 12 }}>
-        <X size={20} />
-        Erro ao carregar: {erroCarregamento}
-        <button onClick={() => window.location.reload()}
-          style={{ padding: "8px 16px", borderRadius: 8, border: "1px solid rgba(248,113,113,0.3)", background: "rgba(248,113,113,0.08)", color: "#f87171", cursor: "pointer", fontFamily: "DM Sans", fontSize: 13 }}>
-          Tentar novamente
-        </button>
-      </div>
-    )
-  }
+  if (carregando) return (
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: 300, color: "#555", fontSize: 14, gap: 12 }}>
+      <RefreshCw size={16} style={{ animation: "spin 1s linear infinite" }} />Carregando dados da planilha...
+      <style>{`@keyframes spin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }`}</style>
+    </div>
+  )
+  if (erroCarregamento) return (
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: 300, color: "#f87171", fontSize: 14, gap: 12 }}>
+      <X size={20} />Erro ao carregar: {erroCarregamento}
+      <button onClick={() => window.location.reload()} style={{ padding: "8px 16px", borderRadius: 8, border: "1px solid rgba(248,113,113,0.3)", background: "rgba(248,113,113,0.08)", color: "#f87171", cursor: "pointer", fontFamily: "DM Sans", fontSize: 13 }}>Tentar novamente</button>
+    </div>
+  )
 
   return (
     <div style={{ padding: "32px 40px", maxWidth: 1600, margin: "0 auto" }}>
-
-      {/* ── BARRA SEMANA + RECEITA */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 28, gap: 16, flexWrap: "wrap" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
           <div style={{ fontSize: 11, color: "#555", textTransform: "uppercase", letterSpacing: 1 }}>Semana</div>
-          <select
-            value={semanaSel}
-            onChange={e => { setSemanaSel(e.target.value); setFiltroSemanaTabela("") }}
-            style={{ background: "#0f0f0f", border: "1px solid rgba(255,255,255,0.1)", color: "#fff", padding: "8px 14px", borderRadius: 8, fontFamily: "DM Sans", fontSize: 14, fontWeight: 600, outline: "none", cursor: "pointer" }}
-          >
+          <select value={semanaSel} onChange={e => { setSemanaSel(e.target.value); setFiltroSemanaTabela("") }} style={{ background: "#0f0f0f", border: "1px solid rgba(255,255,255,0.1)", color: "#fff", padding: "8px 14px", borderRadius: 8, fontFamily: "DM Sans", fontSize: 14, fontWeight: 600, outline: "none", cursor: "pointer" }}>
             {semanas.map(s => <option key={s} value={s}>{s}</option>)}
           </select>
-
-          <button onClick={() => setModalNovaSemana(true)}
-            style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 8, border: "1px solid rgba(255,216,77,0.25)", background: "rgba(255,216,77,0.08)", color: "#FFD84D", fontFamily: "DM Sans", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
-            <Plus size={13} /> Nova semana
-          </button>
-
-          <button onClick={excluirSemana}
-            style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 8, border: "1px solid rgba(239,83,80,0.25)", background: "rgba(239,83,80,0.08)", color: "#f87171", fontFamily: "DM Sans", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
-            <Trash2 size={13} /> Excluir semana
-          </button>
-
-          <button onClick={exportarCSVSemana}
-            style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 8, border: "1px solid rgba(100,181,246,0.25)", background: "rgba(100,181,246,0.08)", color: "#90caf9", fontFamily: "DM Sans", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
-            <Download size={13} /> Exportar CSV
-          </button>
+          <button onClick={() => setModalNovaSemana(true)} style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 8, border: "1px solid rgba(255,216,77,0.25)", background: "rgba(255,216,77,0.08)", color: "#FFD84D", fontFamily: "DM Sans", fontSize: 12, fontWeight: 600, cursor: "pointer" }}><Plus size={13} /> Nova semana</button>
+          <button onClick={excluirSemana} style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 8, border: "1px solid rgba(239,83,80,0.25)", background: "rgba(239,83,80,0.08)", color: "#f87171", fontFamily: "DM Sans", fontSize: 12, fontWeight: 600, cursor: "pointer" }}><Trash2 size={13} /> Excluir semana</button>
+          <button onClick={exportarCSVSemana} style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 8, border: "1px solid rgba(100,181,246,0.25)", background: "rgba(100,181,246,0.08)", color: "#90caf9", fontFamily: "DM Sans", fontSize: 12, fontWeight: 600, cursor: "pointer" }}><Download size={13} /> Exportar CSV</button>
         </div>
-
         <div style={{ display: "flex", alignItems: "center", gap: 10, background: "rgba(74,222,128,0.06)", border: "1px solid rgba(74,222,128,0.2)", borderRadius: 10, padding: "10px 16px" }}>
           <span style={{ fontSize: 11, color: "#555", textTransform: "uppercase", letterSpacing: 1 }}>Receita OL</span>
           {editandoReceita ? (
             <>
-              <input autoFocus value={inputReceita} onChange={e => setInputReceita(e.target.value)}
-                onKeyDown={e => e.key === "Enter" && salvarReceita()} placeholder="0,00"
-                style={{ background: "transparent", border: "none", borderBottom: "1px solid rgba(74,222,128,0.4)", color: "#4ade80", fontFamily: "DM Sans", fontSize: 16, fontWeight: 700, width: 100, outline: "none", textAlign: "right" }} />
+              <input autoFocus value={inputReceita} onChange={e => setInputReceita(e.target.value)} onKeyDown={e => e.key === "Enter" && salvarReceita()} placeholder="0,00" style={{ background: "transparent", border: "none", borderBottom: "1px solid rgba(74,222,128,0.4)", color: "#4ade80", fontFamily: "DM Sans", fontSize: 16, fontWeight: 700, width: 100, outline: "none", textAlign: "right" }} />
               <button onClick={salvarReceita} style={{ background: "none", border: "none", color: "#4ade80", cursor: "pointer", display: "flex" }}><Check size={16} /></button>
               <button onClick={() => setEditandoReceita(false)} style={{ background: "none", border: "none", color: "#555", cursor: "pointer", display: "flex" }}><X size={14} /></button>
             </>
           ) : (
             <>
-              <span style={{ fontFamily: "Bebas Neue, sans-serif", fontSize: 22, color: "#4ade80", letterSpacing: 1 }}>
-                R$ {receitaSemana.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-              </span>
-              <button onClick={() => { setInputReceita(String(receitaSemana)); setEditandoReceita(true) }}
-                style={{ background: "none", border: "none", color: "#555", cursor: "pointer", display: "flex", transition: "color 0.2s" }}
-                onMouseEnter={e => (e.currentTarget.style.color = "#4ade80")}
-                onMouseLeave={e => (e.currentTarget.style.color = "#555")}
-              ><Edit2 size={14} /></button>
+              <span style={{ fontFamily: "Bebas Neue, sans-serif", fontSize: 22, color: "#4ade80", letterSpacing: 1 }}>R$ {receitaSemana.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</span>
+              <button onClick={() => { setInputReceita(String(receitaSemana)); setEditandoReceita(true) }} style={{ background: "none", border: "none", color: "#555", cursor: "pointer", display: "flex", transition: "color 0.2s" }} onMouseEnter={e => (e.currentTarget.style.color = "#4ade80")} onMouseLeave={e => (e.currentTarget.style.color = "#555")}><Edit2 size={14} /></button>
             </>
           )}
         </div>
       </div>
 
-      {/* ── KPI CARDS */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 14, marginBottom: 28 }}>
         {[
           { label: "Receita", value: receitaSemana, color: "#4ade80", icon: <TrendingUp size={18} color="#4ade80" /> },
@@ -411,18 +307,14 @@ export function AbaDespesas() {
           <div key={i} style={{ background: "#0f0f0f", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 14, padding: "18px 16px", position: "relative", overflow: "hidden" }}>
             <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, background: k.color }} />
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-              <span style={{ fontSize: 10, color: "#555", textTransform: "uppercase", letterSpacing: 1.5 }}>{k.label}</span>
-              {k.icon}
+              <span style={{ fontSize: 10, color: "#555", textTransform: "uppercase", letterSpacing: 1.5 }}>{k.label}</span>{k.icon}
             </div>
-            <div style={{ fontFamily: "Bebas Neue, sans-serif", fontSize: 26, color: k.color, letterSpacing: 1 }}>
-              R$ {k.value.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-            </div>
+            <div style={{ fontFamily: "Bebas Neue, sans-serif", fontSize: 26, color: k.color, letterSpacing: 1 }}>R$ {k.value.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</div>
             {k.sub && <div style={{ fontSize: 11, color: "#555", marginTop: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{k.sub}</div>}
           </div>
         ))}
       </div>
 
-      {/* ── GRÁFICOS */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 28 }}>
         <div style={{ background: "#0f0f0f", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 14, padding: 24 }}>
           <div style={{ fontFamily: "Syne, sans-serif", fontSize: 12, fontWeight: 700, color: "#fff", textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 20 }}>Comparativo Semanal</div>
@@ -438,7 +330,6 @@ export function AbaDespesas() {
             </BarChart>
           </ResponsiveContainer>
         </div>
-
         <div style={{ background: "#0f0f0f", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 14, padding: 24 }}>
           <div style={{ fontFamily: "Syne, sans-serif", fontSize: 12, fontWeight: 700, color: "#fff", textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 20 }}>Evolução do Lucro</div>
           <ResponsiveContainer width="100%" height={200}>
@@ -467,49 +358,20 @@ export function AbaDespesas() {
         </div>
       )}
 
-      {/* ── LISTA DE DESPESAS */}
       <div style={{ background: "#0f0f0f", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 14, overflow: "hidden" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "18px 24px", borderBottom: "1px solid rgba(255,255,255,0.06)", flexWrap: "wrap", gap: 12 }}>
-          <div style={{ fontFamily: "Syne, sans-serif", fontSize: 13, fontWeight: 700, color: "#fff", textTransform: "uppercase", letterSpacing: 1.5 }}>
-            Despesas {filtroSemanaTabela ? `— ${filtroSemanaTabela}` : `— ${semanaSel}`}
-          </div>
+          <div style={{ fontFamily: "Syne, sans-serif", fontSize: 13, fontWeight: 700, color: "#fff", textTransform: "uppercase", letterSpacing: 1.5 }}>Despesas {filtroSemanaTabela ? `— ${filtroSemanaTabela}` : `— ${semanaSel}`}</div>
           <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-
-            {/* ── FILTRO POR SEMANA NA TABELA */}
             <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
               <Search size={13} color="#555" />
-              <select
-                value={filtroSemanaTabela}
-                onChange={e => setFiltroSemanaTabela(e.target.value)}
-                style={{
-                  background: "#161616",
-                  border: `1px solid ${filtroSemanaTabela ? "rgba(255,216,77,0.4)" : "rgba(255,255,255,0.1)"}`,
-                  color: filtroSemanaTabela ? "#FFD84D" : "#666",
-                  padding: "6px 12px", borderRadius: 8, fontFamily: "DM Sans",
-                  fontSize: 12, fontWeight: 600, outline: "none", cursor: "pointer"
-                }}
-              >
+              <select value={filtroSemanaTabela} onChange={e => setFiltroSemanaTabela(e.target.value)} style={{ background: "#161616", border: `1px solid ${filtroSemanaTabela ? "rgba(255,216,77,0.4)" : "rgba(255,255,255,0.1)"}`, color: filtroSemanaTabela ? "#FFD84D" : "#666", padding: "6px 12px", borderRadius: 8, fontFamily: "DM Sans", fontSize: 12, fontWeight: 600, outline: "none", cursor: "pointer" }}>
                 <option value="">Semana selecionada</option>
                 {semanas.map(s => <option key={s} value={s}>{s}</option>)}
               </select>
-              {filtroSemanaTabela && (
-                <button onClick={() => setFiltroSemanaTabela("")}
-                  title="Limpar filtro"
-                  style={{ background: "none", border: "none", color: "#555", cursor: "pointer", display: "flex", padding: 4 }}>
-                  <X size={13} />
-                </button>
-              )}
+              {filtroSemanaTabela && <button onClick={() => setFiltroSemanaTabela("")} style={{ background: "none", border: "none", color: "#555", cursor: "pointer", display: "flex", padding: 4 }}><X size={13} /></button>}
             </div>
-
-            <span style={{ fontSize: 12, color: "#555", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.07)", padding: "4px 10px", borderRadius: 20 }}>
-              {despExibidas.length} item{despExibidas.length !== 1 ? "s" : ""}
-            </span>
-            <button onClick={() => abrirForm()}
-              style={{ display: "flex", alignItems: "center", gap: 7, padding: "8px 16px", borderRadius: 8, border: "none", background: "linear-gradient(135deg, #7b1fa2, #9c27b0)", color: "#fff", fontFamily: "DM Sans", fontSize: 13, fontWeight: 600, cursor: "pointer", transition: "all 0.2s" }}
-              onMouseEnter={e => (e.currentTarget.style.transform = "translateY(-1px)")}
-              onMouseLeave={e => (e.currentTarget.style.transform = "translateY(0)")}>
-              <Plus size={14} /> Adicionar despesa
-            </button>
+            <span style={{ fontSize: 12, color: "#555", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.07)", padding: "4px 10px", borderRadius: 20 }}>{despExibidas.length} item{despExibidas.length !== 1 ? "s" : ""}</span>
+            <button onClick={() => abrirForm()} style={{ display: "flex", alignItems: "center", gap: 7, padding: "8px 16px", borderRadius: 8, border: "none", background: "linear-gradient(135deg, #7b1fa2, #9c27b0)", color: "#fff", fontFamily: "DM Sans", fontSize: 13, fontWeight: 600, cursor: "pointer", transition: "all 0.2s" }} onMouseEnter={e => (e.currentTarget.style.transform = "translateY(-1px)")} onMouseLeave={e => (e.currentTarget.style.transform = "translateY(0)")}><Plus size={14} /> Adicionar despesa</button>
           </div>
         </div>
 
@@ -518,57 +380,40 @@ export function AbaDespesas() {
             <div style={{ display: "grid", gridTemplateColumns: "1fr 140px 1fr 160px auto", gap: 12, alignItems: "end" }}>
               <div>
                 <div style={{ fontSize: 10, color: "#555", textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 }}>Nome da despesa</div>
-                <input autoFocus value={formNome} onChange={e => setFormNome(e.target.value)} placeholder="Ex: Aluguel galpão"
-                  style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid rgba(255,255,255,0.1)", background: "#161616", color: "#fff", fontFamily: "DM Sans", fontSize: 14, outline: "none" }} />
+                <input autoFocus value={formNome} onChange={e => setFormNome(e.target.value)} placeholder="Ex: Aluguel galpão" style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid rgba(255,255,255,0.1)", background: "#161616", color: "#fff", fontFamily: "DM Sans", fontSize: 14, outline: "none" }} />
               </div>
               <div>
                 <div style={{ fontSize: 10, color: "#555", textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 }}>Valor (R$)</div>
-                <input value={formValor} onChange={e => setFormValor(e.target.value)} placeholder="0,00"
-                  style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid rgba(255,255,255,0.1)", background: "#161616", color: "#fff", fontFamily: "DM Sans", fontSize: 14, outline: "none" }} />
+                <input value={formValor} onChange={e => setFormValor(e.target.value)} placeholder="0,00" style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid rgba(255,255,255,0.1)", background: "#161616", color: "#fff", fontFamily: "DM Sans", fontSize: 14, outline: "none" }} />
               </div>
               <div>
                 <div style={{ fontSize: 10, color: "#555", textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 }}>Categoria</div>
                 <div style={{ display: "flex", gap: 6 }}>
                   {mostrarNovaCategoria ? (
                     <div style={{ display: "flex", gap: 6, flex: 1 }}>
-                      <input autoFocus value={novaCategoria} onChange={e => setNovaCategoria(e.target.value)}
-                        onKeyDown={e => e.key === "Enter" && adicionarCategoria()} placeholder="Nova categoria"
-                        style={{ flex: 1, padding: "10px 12px", borderRadius: 8, border: "1px solid rgba(255,216,77,0.3)", background: "#161616", color: "#fff", fontFamily: "DM Sans", fontSize: 14, outline: "none" }} />
+                      <input autoFocus value={novaCategoria} onChange={e => setNovaCategoria(e.target.value)} onKeyDown={e => e.key === "Enter" && adicionarCategoria()} placeholder="Nova categoria" style={{ flex: 1, padding: "10px 12px", borderRadius: 8, border: "1px solid rgba(255,216,77,0.3)", background: "#161616", color: "#fff", fontFamily: "DM Sans", fontSize: 14, outline: "none" }} />
                       <button onClick={adicionarCategoria} style={{ padding: "10px 12px", borderRadius: 8, border: "none", background: "rgba(255,216,77,0.15)", color: "#FFD84D", cursor: "pointer" }}><Check size={14} /></button>
                       <button onClick={() => setMostrarNovaCategoria(false)} style={{ padding: "10px 12px", borderRadius: 8, border: "none", background: "rgba(255,255,255,0.05)", color: "#666", cursor: "pointer" }}><X size={14} /></button>
                     </div>
                   ) : (
                     <>
-                      <select value={formCategoria} onChange={e => setFormCategoria(e.target.value)}
-                        style={{ flex: 1, padding: "10px 12px", borderRadius: 8, border: "1px solid rgba(255,255,255,0.1)", background: "#161616", color: "#fff", fontFamily: "DM Sans", fontSize: 14, outline: "none", cursor: "pointer" }}>
+                      <select value={formCategoria} onChange={e => setFormCategoria(e.target.value)} style={{ flex: 1, padding: "10px 12px", borderRadius: 8, border: "1px solid rgba(255,255,255,0.1)", background: "#161616", color: "#fff", fontFamily: "DM Sans", fontSize: 14, outline: "none", cursor: "pointer" }}>
                         {categorias.map(c => <option key={c} value={c}>{c}</option>)}
                       </select>
-                      <button onClick={() => setMostrarNovaCategoria(true)} title="Nova categoria"
-                        style={{ padding: "10px 12px", borderRadius: 8, border: "1px solid rgba(255,216,77,0.25)", background: "rgba(255,216,77,0.08)", color: "#FFD84D", cursor: "pointer", display: "flex", alignItems: "center" }}>
-                        <Plus size={14} />
-                      </button>
+                      <button onClick={() => setMostrarNovaCategoria(true)} style={{ padding: "10px 12px", borderRadius: 8, border: "1px solid rgba(255,216,77,0.25)", background: "rgba(255,216,77,0.08)", color: "#FFD84D", cursor: "pointer", display: "flex", alignItems: "center" }}><Plus size={14} /></button>
                     </>
                   )}
                 </div>
               </div>
               <div>
                 <div style={{ fontSize: 10, color: "#555", textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 }}>Status</div>
-                <select value={formStatus} onChange={e => setFormStatus(e.target.value as StatusDespesa)}
-                  style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid rgba(255,255,255,0.1)", background: "#161616", color: "#fff", fontFamily: "DM Sans", fontSize: 14, outline: "none", cursor: "pointer" }}>
-                  <option value="PENDENTE">Pendente</option>
-                  <option value="PAGO">Pago</option>
-                  <option value="CANCELADO">Cancelado</option>
+                <select value={formStatus} onChange={e => setFormStatus(e.target.value as StatusDespesa)} style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid rgba(255,255,255,0.1)", background: "#161616", color: "#fff", fontFamily: "DM Sans", fontSize: 14, outline: "none", cursor: "pointer" }}>
+                  <option value="PENDENTE">Pendente</option><option value="PAGO">Pago</option><option value="CANCELADO">Cancelado</option>
                 </select>
               </div>
               <div style={{ display: "flex", gap: 8 }}>
-                <button onClick={confirmarForm}
-                  style={{ padding: "10px 18px", borderRadius: 8, border: "none", background: "linear-gradient(135deg, #7b1fa2, #9c27b0)", color: "#fff", fontFamily: "DM Sans", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
-                  {editandoId ? "Salvar" : "Adicionar"}
-                </button>
-                <button onClick={() => setFormAberto(false)}
-                  style={{ padding: "10px 12px", borderRadius: 8, border: "1px solid rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.04)", color: "#666", cursor: "pointer" }}>
-                  <X size={14} />
-                </button>
+                <button onClick={confirmarForm} style={{ padding: "10px 18px", borderRadius: 8, border: "none", background: "linear-gradient(135deg, #7b1fa2, #9c27b0)", color: "#fff", fontFamily: "DM Sans", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>{editandoId ? "Salvar" : "Adicionar"}</button>
+                <button onClick={() => setFormAberto(false)} style={{ padding: "10px 12px", borderRadius: 8, border: "1px solid rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.04)", color: "#666", cursor: "pointer" }}><X size={14} /></button>
               </div>
             </div>
           </div>
@@ -589,39 +434,20 @@ export function AbaDespesas() {
               ) : despExibidas.map(d => {
                 const sc = statusConfig[d.status]
                 return (
-                  <tr key={d.id} style={{ borderBottom: "1px solid rgba(255,255,255,0.04)", opacity: d.status === "CANCELADO" ? 0.4 : 1 }}
-                    onMouseEnter={e => (e.currentTarget.style.background = "rgba(255,255,255,0.02)")}
-                    onMouseLeave={e => (e.currentTarget.style.background = "transparent")}>
+                  <tr key={d.id} style={{ borderBottom: "1px solid rgba(255,255,255,0.04)", opacity: d.status === "CANCELADO" ? 0.4 : 1 }} onMouseEnter={e => (e.currentTarget.style.background = "rgba(255,255,255,0.02)")} onMouseLeave={e => (e.currentTarget.style.background = "transparent")}>
                     <td style={{ padding: "14px 20px", fontSize: 14, color: "#e8e8f0", fontWeight: 500 }}>{d.nome}</td>
+                    <td style={{ padding: "14px 20px" }}><span style={{ fontSize: 11, padding: "3px 10px", borderRadius: 20, background: "rgba(167,139,250,0.08)", color: "#a78bfa", border: "1px solid rgba(167,139,250,0.2)" }}>{d.categoria}</span></td>
+                    <td style={{ padding: "14px 20px", fontFamily: "Syne, sans-serif", fontSize: 15, fontWeight: 700, color: "#fff" }}>R$ {d.valor.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</td>
                     <td style={{ padding: "14px 20px" }}>
-                      <span style={{ fontSize: 11, padding: "3px 10px", borderRadius: 20, background: "rgba(167,139,250,0.08)", color: "#a78bfa", border: "1px solid rgba(167,139,250,0.2)" }}>{d.categoria}</span>
-                    </td>
-                    <td style={{ padding: "14px 20px", fontFamily: "Syne, sans-serif", fontSize: 15, fontWeight: 700, color: "#fff" }}>
-                      R$ {d.valor.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-                    </td>
-                    <td style={{ padding: "14px 20px" }}>
-                      <select value={d.status} onChange={e => alterarStatus(d.id, e.target.value as StatusDespesa)}
-                        style={{ padding: "5px 10px", borderRadius: 20, border: `1px solid ${sc.border}`, background: sc.bg, color: sc.color, fontFamily: "DM Sans", fontSize: 12, fontWeight: 600, cursor: "pointer", outline: "none" }}>
-                        <option value="PAGO">✓ Pago</option>
-                        <option value="PENDENTE">⏳ Pendente</option>
-                        <option value="CANCELADO">✗ Cancelado</option>
+                      <select value={d.status} onChange={e => alterarStatus(d.id, e.target.value as StatusDespesa)} style={{ padding: "5px 10px", borderRadius: 20, border: `1px solid ${sc.border}`, background: sc.bg, color: sc.color, fontFamily: "DM Sans", fontSize: 12, fontWeight: 600, cursor: "pointer", outline: "none" }}>
+                        <option value="PAGO">✓ Pago</option><option value="PENDENTE">⏳ Pendente</option><option value="CANCELADO">✗ Cancelado</option>
                       </select>
                     </td>
                     <td style={{ padding: "14px 20px", fontSize: 12, color: "#666" }}>{d.semana}</td>
                     <td style={{ padding: "14px 20px" }}>
                       <div style={{ display: "flex", gap: 8 }}>
-                        <button onClick={() => abrirForm(d)}
-                          style={{ padding: "6px 10px", borderRadius: 6, border: "1px solid rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.04)", color: "#aaa", cursor: "pointer", display: "flex", alignItems: "center", transition: "all 0.2s" }}
-                          onMouseEnter={e => { e.currentTarget.style.borderColor = "rgba(156,39,176,0.4)"; e.currentTarget.style.color = "#ce93d8" }}
-                          onMouseLeave={e => { e.currentTarget.style.borderColor = "rgba(255,255,255,0.08)"; e.currentTarget.style.color = "#aaa" }}>
-                          <Edit2 size={13} />
-                        </button>
-                        <button onClick={() => excluir(d.id)}
-                          style={{ padding: "6px 10px", borderRadius: 6, border: "1px solid rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.04)", color: "#aaa", cursor: "pointer", display: "flex", alignItems: "center", transition: "all 0.2s" }}
-                          onMouseEnter={e => { e.currentTarget.style.borderColor = "rgba(239,83,80,0.4)"; e.currentTarget.style.color = "#ef5350" }}
-                          onMouseLeave={e => { e.currentTarget.style.borderColor = "rgba(255,255,255,0.08)"; e.currentTarget.style.color = "#aaa" }}>
-                          <Trash2 size={13} />
-                        </button>
+                        <button onClick={() => abrirForm(d)} style={{ padding: "6px 10px", borderRadius: 6, border: "1px solid rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.04)", color: "#aaa", cursor: "pointer", display: "flex", alignItems: "center", transition: "all 0.2s" }} onMouseEnter={e => { e.currentTarget.style.borderColor = "rgba(156,39,176,0.4)"; e.currentTarget.style.color = "#ce93d8" }} onMouseLeave={e => { e.currentTarget.style.borderColor = "rgba(255,255,255,0.08)"; e.currentTarget.style.color = "#aaa" }}><Edit2 size={13} /></button>
+                        <button onClick={() => excluir(d.id)} style={{ padding: "6px 10px", borderRadius: 6, border: "1px solid rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.04)", color: "#aaa", cursor: "pointer", display: "flex", alignItems: "center", transition: "all 0.2s" }} onMouseEnter={e => { e.currentTarget.style.borderColor = "rgba(239,83,80,0.4)"; e.currentTarget.style.color = "#ef5350" }} onMouseLeave={e => { e.currentTarget.style.borderColor = "rgba(255,255,255,0.08)"; e.currentTarget.style.color = "#aaa" }}><Trash2 size={13} /></button>
                       </div>
                     </td>
                   </tr>
@@ -632,9 +458,7 @@ export function AbaDespesas() {
               <tfoot>
                 <tr style={{ borderTop: "1px solid rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.02)" }}>
                   <td colSpan={2} style={{ padding: "12px 20px", fontSize: 12, color: "#555", textTransform: "uppercase", letterSpacing: 1 }}>Total</td>
-                  <td style={{ padding: "12px 20px", fontFamily: "Syne, sans-serif", fontSize: 16, fontWeight: 700, color: "#f87171" }}>
-                    R$ {totalExibido.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-                  </td>
+                  <td style={{ padding: "12px 20px", fontFamily: "Syne, sans-serif", fontSize: 16, fontWeight: 700, color: "#f87171" }}>R$ {totalExibido.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</td>
                   <td colSpan={3} style={{ padding: "12px 20px", fontSize: 13, color: lucroExibido >= 0 ? "#4ade80" : "#f87171", fontWeight: 600 }}>
                     Lucro: R$ {lucroExibido.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
                     {filtroSemanaTabela && <span style={{ marginLeft: 12, fontSize: 11, color: "#FFD84D", fontWeight: 400 }}>filtro: {filtroSemanaTabela}</span>}
@@ -647,26 +471,16 @@ export function AbaDespesas() {
       </div>
 
       {modalNovaSemana && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", backdropFilter: "blur(4px)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center" }}
-          onClick={() => setModalNovaSemana(false)}>
-          <div style={{ background: "#13131a", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 16, padding: 32, width: 380, display: "flex", flexDirection: "column", gap: 20 }}
-            onClick={e => e.stopPropagation()}>
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", backdropFilter: "blur(4px)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center" }} onClick={() => setModalNovaSemana(false)}>
+          <div style={{ background: "#13131a", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 16, padding: 32, width: 380, display: "flex", flexDirection: "column", gap: 20 }} onClick={e => e.stopPropagation()}>
             <div style={{ fontFamily: "Syne, sans-serif", fontSize: 18, fontWeight: 700, color: "#fff" }}>Nova Semana</div>
             <div>
               <div style={{ fontSize: 11, color: "#555", textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>Nome da semana</div>
-              <input autoFocus value={novaSemanaInput} onChange={e => setNovaSemanaInput(e.target.value)}
-                onKeyDown={e => e.key === "Enter" && criarSemana()} placeholder="Ex: 10/03 - 16/03"
-                style={{ width: "100%", padding: "12px 14px", borderRadius: 8, border: "1px solid rgba(255,255,255,0.1)", background: "#161616", color: "#fff", fontFamily: "DM Sans", fontSize: 14, outline: "none" }} />
+              <input autoFocus value={novaSemanaInput} onChange={e => setNovaSemanaInput(e.target.value)} onKeyDown={e => e.key === "Enter" && criarSemana()} placeholder="Ex: 10/03 - 16/03" style={{ width: "100%", padding: "12px 14px", borderRadius: 8, border: "1px solid rgba(255,255,255,0.1)", background: "#161616", color: "#fff", fontFamily: "DM Sans", fontSize: 14, outline: "none" }} />
             </div>
             <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
-              <button onClick={() => setModalNovaSemana(false)}
-                style={{ padding: "9px 16px", borderRadius: 8, border: "1px solid rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.04)", color: "#888", fontFamily: "DM Sans", fontSize: 13, cursor: "pointer" }}>
-                Cancelar
-              </button>
-              <button onClick={criarSemana}
-                style={{ padding: "9px 18px", borderRadius: 8, border: "none", background: "linear-gradient(135deg, #7b1fa2, #9c27b0)", color: "#fff", fontFamily: "DM Sans", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
-                Criar
-              </button>
+              <button onClick={() => setModalNovaSemana(false)} style={{ padding: "9px 16px", borderRadius: 8, border: "1px solid rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.04)", color: "#888", fontFamily: "DM Sans", fontSize: 13, cursor: "pointer" }}>Cancelar</button>
+              <button onClick={criarSemana} style={{ padding: "9px 18px", borderRadius: 8, border: "none", background: "linear-gradient(135deg, #7b1fa2, #9c27b0)", color: "#fff", fontFamily: "DM Sans", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Criar</button>
             </div>
           </div>
         </div>
@@ -675,11 +489,9 @@ export function AbaDespesas() {
   )
 }
 
-// ─── PAINEL PRINCIPAL ────────────────────────────────────────────────────────
-import { Receipt } from "lucide-react"
-
+// ─── PAINEL PRINCIPAL ─────────────────────────────────────────────────────────
 export default function Painel() {
-  const [aba, setAba] = useState<"notas" | "despesas">("notas")
+  const [aba, setAba] = useState<Aba>("notas")
   const [dados, setDados] = useState<any[]>([])
   const [filtroSemana, setFiltroSemana] = useState<any>([null, null])
   const [filtroDia, setFiltroDia] = useState<any>(null)
@@ -733,11 +545,11 @@ export default function Painel() {
     finally { setTimeout(() => setMsgSalvar(""), 5000) }
   }
 
-  async function verHistorico(aba: string) {
-    if (!aba) { setModoHistorico(false); setDadosHistorico([]); setSemanaSelecionada(""); return }
-    const res = await fetch(`/api/historico?aba=${encodeURIComponent(aba)}`)
+  async function verHistorico(semana: string) {
+    if (!semana) { setModoHistorico(false); setDadosHistorico([]); setSemanaSelecionada(""); return }
+    const res = await fetch(`/api/historico?aba=${encodeURIComponent(semana)}`)
     const json = await res.json()
-    if (json.dados) { setDadosHistorico(json.dados); setSemanaSelecionada(aba); setModoHistorico(true) }
+    if (json.dados) { setDadosHistorico(json.dados); setSemanaSelecionada(semana); setModoHistorico(true) }
   }
 
   function exportarCSV() {
@@ -783,7 +595,6 @@ export default function Painel() {
     const num = telefone.replace(/\D/g, ""); const numFinal = num.startsWith("55") ? num : `55${num}`
     return `https://wa.me/${numFinal}?text=${encodeURIComponent(`Olá ${nome}! 👋 Identificamos que sua nota fiscal referente à semana ainda não foi enviada. Por favor, envie o quanto antes para regularizar seu pagamento. Obrigado!`)}`
   }
-
   function telegramLink(telefone: string) { const num = telefone.replace(/\D/g, ""); return `https://t.me/${num.startsWith("55") ? `+${num}` : `+55${num}`}` }
   function telegramMsg(nome: string) { return `Olá ${nome}! 👋 Identificamos que sua nota fiscal referente à semana ainda não foi enviada. Por favor, envie o quanto antes para regularizar seu pagamento. Obrigado!` }
   function abrirTelegram(telefone: string, nome: string) { navigator.clipboard.writeText(telegramMsg(nome)); window.open(telegramLink(telefone), "_blank") }
@@ -823,6 +634,7 @@ export default function Painel() {
         .tab-btn:hover { color:#aaa; }
         .tab-btn.ativa { color:#fff; border-bottom-color:#9c27b0; }
         .tab-btn.ativa-gold { color:#FFD84D; border-bottom-color:#FFD84D; }
+        .tab-btn.ativa-green { color:#4ade80; border-bottom-color:#4ade80; }
         .stats-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:16px; margin-bottom:28px; }
         .stat-card { background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.07); border-radius:14px; padding:22px 24px; display:flex; align-items:center; gap:16px; cursor:pointer; transition:all 0.2s; position:relative; overflow:hidden; }
         .stat-card:hover { transform:translateY(-2px); }
@@ -904,6 +716,7 @@ export default function Painel() {
           </div>
         </header>
 
+        {/* ── TABS */}
         <div className="tabs-bar">
           <button className={`tab-btn ${aba === "notas" ? "ativa" : ""}`} onClick={() => setAba("notas")}>
             <Users size={15} /> Notas Fiscais
@@ -911,8 +724,12 @@ export default function Painel() {
           <button className={`tab-btn ${aba === "despesas" ? "ativa-gold" : ""}`} onClick={() => setAba("despesas")}>
             <Receipt size={15} /> Despesas & Financeiro
           </button>
+          <button className={`tab-btn ${aba === "performance" ? "ativa-green" : ""}`} onClick={() => setAba("performance")}>
+            <BarChart2 size={15} /> Performance
+          </button>
         </div>
 
+        {/* ── ABA NOTAS */}
         {aba === "notas" && (
           <main style={{ padding: "36px 40px", maxWidth: 1600, margin: "0 auto" }}>
             {!avisoFechado && (
@@ -929,7 +746,7 @@ export default function Painel() {
                 { label: "Pendentes", value: pendentes, icon: <AlertCircle size={20} color="#ef9a9a" />, bg: "rgba(239,83,80,0.15)", accent: "rgba(239,83,80,0.3)", onClick: () => { setFiltroStatus("PENDENTE"); setAplicarFiltro(true) } },
                 { label: "Valor Total", value: `R$ ${valorTotal.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`, icon: <DollarSign size={20} color="#90caf9" />, bg: "rgba(100,181,246,0.15)", accent: "rgba(100,181,246,0.3)", onClick: () => {} },
               ].map((s, i) => (
-                <div key={i} className="stat-card" onClick={s.onClick} style={{ "--card-accent": s.accent } as any}
+                <div key={i} className="stat-card" onClick={s.onClick}
                   onMouseEnter={e => (e.currentTarget.style.borderColor = s.accent)}
                   onMouseLeave={e => (e.currentTarget.style.borderColor = "rgba(255,255,255,0.07)")}>
                   <div className="stat-icon-wrap" style={{ background: s.bg }}>{s.icon}</div>
@@ -1045,7 +862,11 @@ export default function Painel() {
           </main>
         )}
 
+        {/* ── ABA DESPESAS */}
         {aba === "despesas" && <AbaDespesas />}
+
+        {/* ── ABA PERFORMANCE */}
+        {aba === "performance" && <AbaPerformance />}
       </div>
 
       {modalSalvar && (
