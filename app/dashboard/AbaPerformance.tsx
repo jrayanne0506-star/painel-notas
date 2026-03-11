@@ -1,6 +1,6 @@
 "use client"
 
-import { useRef, useState, useMemo } from "react"
+import { useState, useMemo } from "react"
 import * as XLSX from "xlsx"
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
@@ -32,6 +32,24 @@ interface EntregadorDia {
   compareceu: string
 }
 
+// ─── UTILS ─────────────────────────────────────────────────────────────────
+function toNum(v: any): number {
+  if (v === null || v === undefined || v === "-" || v === "") return 0
+  const n = Number(v)
+  return isNaN(n) ? 0 : n
+}
+
+function pct(v: number) {
+  return `${(v * 100).toFixed(1)}%`
+}
+
+function avg(arr: number[]) {
+  if (!arr.length) return 0
+  return arr.reduce((a, b) => a + b, 0) / arr.length
+}
+
+type SortKey = "nome" | "entregues" | "aceitas" | "canceladas" | "taxaPontualidade" | "tempoMedioEntrega" | "tempoOnline"
+
 // ─── PARSER DO EXCEL ──────────────────────────────────────────────────────
 function parseExcel(file: File): Promise<EntregadorDia[]> {
   return new Promise((resolve, reject) => {
@@ -44,11 +62,14 @@ function parseExcel(file: File): Promise<EntregadorDia[]> {
         const rows: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null })
 
         const parsed: EntregadorDia[] = []
+        // linhas 0 e 1 são cabeçalho, dados começam na linha 2
         for (let i = 2; i < rows.length; i++) {
           const r = rows[i]
           if (!r[0] || !r[2]) continue
+
           const dataStr = String(r[0]).replace(".0", "")
           const fmt = `${dataStr.slice(6, 8)}/${dataStr.slice(4, 6)}/${dataStr.slice(0, 4)}`
+
           parsed.push({
             data: fmt,
             id: String(r[1] ?? ""),
@@ -56,17 +77,17 @@ function parseExcel(file: File): Promise<EntregadorDia[]> {
             bloco: String(r[4] ?? ""),
             veiculo: String(r[5] ?? ""),
             compareceu: String(r[7] ?? ""),
-            tempoOnline: Number(r[8] ?? 0),
-            aceitas: Number(r[9] ?? 0),
-            entregues: Number(r[11] ?? 0),
-            canceladas: Number(r[13] ?? 0),
-            recusadas: Number(r[14] ?? 0),
-            recusadasEntregador: Number(r[15] ?? 0),
-            taxaPontualidade: r[19] === "-" || r[19] === null ? 0 : Number(r[19] ?? 0),
-            tempoMedioEntrega: r[22] === "-" || r[22] === null ? 0 : Number(r[22] ?? 0),
-            acima55min: r[23] === "-" || r[23] === null ? 0 : Number(r[23] ?? 0),
-            emAtraso: Number(r[24] ?? 0),
-            muitoAtrasado: Number(r[25] ?? 0),
+            tempoOnline: toNum(r[8]),
+            aceitas: toNum(r[9]),
+            entregues: toNum(r[11]),
+            canceladas: toNum(r[13]),
+            recusadas: toNum(r[14]),
+            recusadasEntregador: toNum(r[15]),
+            taxaPontualidade: toNum(r[19]),
+            tempoMedioEntrega: toNum(r[22]),
+            acima55min: toNum(r[23]),
+            emAtraso: toNum(r[24]),
+            muitoAtrasado: toNum(r[25]),
           })
         }
         resolve(parsed)
@@ -74,20 +95,10 @@ function parseExcel(file: File): Promise<EntregadorDia[]> {
         reject(err)
       }
     }
+    reader.onerror = reject
     reader.readAsArrayBuffer(file)
   })
 }
-
-// ─── UTILS ─────────────────────────────────────────────────────────────────
-function pct(v: number) {
-  return `${(v * 100).toFixed(1)}%`
-}
-function avg(arr: number[]) {
-  if (!arr.length) return 0
-  return arr.reduce((a, b) => a + b, 0) / arr.length
-}
-
-type SortKey = "nome" | "entregues" | "aceitas" | "canceladas" | "taxaPontualidade" | "tempoMedioEntrega" | "tempoOnline"
 
 // ─── COMPONENTE PRINCIPAL ─────────────────────────────────────────────────
 export function AbaPerformance() {
@@ -97,7 +108,6 @@ export function AbaPerformance() {
   const [nomeArquivo, setNomeArquivo] = useState("")
   const [dragOver, setDragOver] = useState(false)
 
-  // Filtros
   const [filtroNome, setFiltroNome] = useState("")
   const [filtroData, setFiltroData] = useState("")
   const [sortKey, setSortKey] = useState<SortKey>("entregues")
@@ -112,6 +122,10 @@ export function AbaPerformance() {
     setErro("")
     try {
       const parsed = await parseExcel(file)
+      if (parsed.length === 0) {
+        setErro("Nenhum dado encontrado no arquivo. Verifique se é o Excel correto da Keeta.")
+        return
+      }
       setDados(parsed)
       setNomeArquivo(file.name)
     } catch (e: any) {
@@ -128,19 +142,16 @@ export function AbaPerformance() {
     if (file) processarArquivo(file)
   }
 
-  // Datas únicas
   const datas = useMemo(() => {
     const set = new Set(dados.map(d => d.data))
     return Array.from(set).sort()
   }, [dados])
 
-  // Dados filtrados por data
   const dadosFiltradosData = useMemo(() => {
     if (!filtroData) return dados
     return dados.filter(d => d.data === filtroData)
   }, [dados, filtroData])
 
-  // Agrupado por entregador
   const porEntregador = useMemo(() => {
     const map: Record<string, EntregadorDia[]> = {}
     dadosFiltradosData.forEach(d => {
@@ -161,7 +172,6 @@ export function AbaPerformance() {
     }))
   }, [dadosFiltradosData])
 
-  // Filtro por nome + sort
   const listaFiltrada = useMemo(() => {
     let lista = porEntregador.filter(e =>
       !filtroNome || e.nome.toLowerCase().includes(filtroNome.toLowerCase())
@@ -174,7 +184,6 @@ export function AbaPerformance() {
     return lista
   }, [porEntregador, filtroNome, sortKey, sortDir])
 
-  // KPIs globais
   const kpis = useMemo(() => {
     const total = dadosFiltradosData
     const entregues = total.reduce((a, d) => a + d.entregues, 0)
@@ -195,7 +204,6 @@ export function AbaPerformance() {
     }
   }, [dadosFiltradosData])
 
-  // Gráfico top 10 entregadores
   const top10 = useMemo(() => {
     return [...listaFiltrada]
       .sort((a, b) => b.entregues - a.entregues)
