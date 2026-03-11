@@ -215,6 +215,44 @@ export function AbaDespesas() {
     setNovaSemanaInput("")
   }
 
+  // ── EXCLUIR SEMANA
+  function excluirSemana() {
+    if (!window.confirm(`Excluir a semana "${semanaSel}" e todas as suas despesas?`)) return
+    const novasDespesas = despesas.filter(d => d.semana !== semanaSel)
+    salvar(novasDespesas)
+    const novasReceitas = { ...receitas }
+    delete novasReceitas[semanaSel]
+    setReceitas(novasReceitas)
+    salvarReceitas(novasReceitas)
+    const novasSemanas = semanas.filter(s => s !== semanaSel)
+    const lista = novasSemanas.length ? novasSemanas : [semanaAtual()]
+    setSemanas(lista)
+    setSemanaSel(lista[0])
+  }
+
+  // ── EXPORTAR CSV DA SEMANA
+  function exportarCSVSemana() {
+    const cabecalho = ["Nome", "Categoria", "Valor (R$)", "Status", "Semana", "Criada em"]
+    const linhas = despSemana.map(d => [
+      d.nome,
+      d.categoria,
+      d.valor.toFixed(2).replace(".", ","),
+      d.status,
+      d.semana,
+      new Date(d.criadaEm).toLocaleString("pt-BR")
+    ])
+    const conteudo = [cabecalho, ...linhas]
+      .map(row => row.map(v => `"${String(v).replace(/"/g, '""')}"`).join(","))
+      .join("\n")
+    const blob = new Blob(["\uFEFF" + conteudo], { type: "text/csv;charset=utf-8;" })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url
+    a.download = `despesas_${semanaSel.replace(/\//g, "-")}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
   const statusConfig = {
     PAGO: { label: "Pago", bg: "rgba(74,222,128,0.1)", color: "#4ade80", border: "rgba(74,222,128,0.25)" },
     PENDENTE: { label: "Pendente", bg: "rgba(251,191,36,0.1)", color: "#fbbf24", border: "rgba(251,191,36,0.25)" },
@@ -226,7 +264,7 @@ export function AbaDespesas() {
 
       {/* ── BARRA SEMANA + RECEITA ─────────────────────────── */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 28, gap: 16, flexWrap: "wrap" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
           <div style={{ fontSize: 11, color: "#555", textTransform: "uppercase", letterSpacing: 1 }}>Semana</div>
           <select
             value={semanaSel}
@@ -235,11 +273,31 @@ export function AbaDespesas() {
           >
             {semanas.map(s => <option key={s} value={s}>{s}</option>)}
           </select>
+
+          {/* Nova semana */}
           <button
             onClick={() => setModalNovaSemana(true)}
             style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 8, border: "1px solid rgba(255,216,77,0.25)", background: "rgba(255,216,77,0.08)", color: "#FFD84D", fontFamily: "DM Sans", fontSize: 12, fontWeight: 600, cursor: "pointer" }}
           >
             <Plus size={13} /> Nova semana
+          </button>
+
+          {/* Excluir semana */}
+          <button
+            onClick={excluirSemana}
+            style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 8, border: "1px solid rgba(239,83,80,0.25)", background: "rgba(239,83,80,0.08)", color: "#f87171", fontFamily: "DM Sans", fontSize: 12, fontWeight: 600, cursor: "pointer" }}
+            title="Excluir semana e todas as despesas"
+          >
+            <Trash2 size={13} /> Excluir semana
+          </button>
+
+          {/* Exportar CSV */}
+          <button
+            onClick={exportarCSVSemana}
+            style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 8, border: "1px solid rgba(100,181,246,0.25)", background: "rgba(100,181,246,0.08)", color: "#90caf9", fontFamily: "DM Sans", fontSize: 12, fontWeight: 600, cursor: "pointer" }}
+            title="Exportar despesas da semana como CSV"
+          >
+            <Download size={13} /> Exportar CSV
           </button>
         </div>
 
@@ -790,7 +848,7 @@ export default function Painel() {
         .sem-telefone { font-size:11px; color:#444; font-style:italic; }
         .nfse-num { font-family:'Syne',sans-serif; font-size:13px; font-weight:700; color:#fff; }
         .validacao-badge { display:inline-flex; align-items:center; gap:6px; padding:5px 12px; border-radius:20px; font-size:12px; font-weight:600; border:1px solid; }
-        .modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.7); backdrop-filter:blur(4px); z-index:1000; display:flex; align-items:center; justify-content:center; }
+        .modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.7); backdrop-filter:blur(4px); z-index:1000; display:flex; align-items:center; justify:center; }
         .modal-box { background:#13131a; border:1px solid rgba(255,255,255,0.1); border-radius:16px; padding:32px; width:380px; display:flex; flex-direction:column; gap:20px; }
         .modal-title { font-family:'Syne',sans-serif; font-size:18px; font-weight:700; color:#fff; }
         .modal-label { font-size:11px; color:#555; text-transform:uppercase; letter-spacing:1px; margin-bottom:8px; }
