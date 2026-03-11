@@ -9,7 +9,7 @@ import {
   Search, X, Download, Save, BarChart2, RefreshCw,
   Plus, Trash2, Edit2, Check, TrendingUp, TrendingDown, Wallet
 } from "lucide-react"
-import { useEffect, useState, useRef } from "react"
+import { useEffect, useState } from "react"
 import DatePicker from "react-datepicker"
 import "react-datepicker/dist/react-datepicker.css"
 import { useRouter } from "next/navigation"
@@ -34,23 +34,22 @@ interface SemanaFinanceira {
   lucro: number
 }
 
-// ─── HELPERS ───────────────────────────────────────────────────────────────
-const LS_DESPESAS = "scorpions_despesas"
-const LS_RECEITAS = "scorpions_receitas"
+// ─── SHEETS API ─────────────────────────────────────────────────────────────
+const SHEETS_API = process.env.NEXT_PUBLIC_SHEETS_API!
 
-function lerDespesas(): Despesa[] {
-  try { return JSON.parse(localStorage.getItem(LS_DESPESAS) || "[]") } catch { return [] }
-}
-function salvarDespesas(d: Despesa[]) {
-  localStorage.setItem(LS_DESPESAS, JSON.stringify(d))
-}
-function lerReceitas(): Record<string, number> {
-  try { return JSON.parse(localStorage.getItem(LS_RECEITAS) || "{}") } catch { return {} }
-}
-function salvarReceitas(r: Record<string, number>) {
-  localStorage.setItem(LS_RECEITAS, JSON.stringify(r))
+async function sheetsGet(aba: string) {
+  const res = await fetch(`${SHEETS_API}?aba=${aba}`)
+  return res.json()
 }
 
+async function sheetsPost(body: object) {
+  await fetch(SHEETS_API, {
+    method: "POST",
+    body: JSON.stringify(body),
+  })
+}
+
+// ─── HELPERS ────────────────────────────────────────────────────────────────
 function semanaAtual() {
   const hoje = new Date()
   const inicio = new Date(hoje)
@@ -77,8 +76,8 @@ export function AbaDespesas() {
   const [semanas, setSemanas] = useState<string[]>([])
   const [semanaSel, setSemanaSel] = useState(semanaAtual())
   const [categorias, setCategorias] = useState<string[]>(CATEGORIAS_DEFAULT)
+  const [carregando, setCarregando] = useState(true)
 
-  // Form nova despesa
   const [formAberto, setFormAberto] = useState(false)
   const [editandoId, setEditandoId] = useState<string | null>(null)
   const [formNome, setFormNome] = useState("")
@@ -88,36 +87,62 @@ export function AbaDespesas() {
   const [novaCategoria, setNovaCategoria] = useState("")
   const [mostrarNovaCategoria, setMostrarNovaCategoria] = useState(false)
 
-  // Receita da semana
   const [editandoReceita, setEditandoReceita] = useState(false)
   const [inputReceita, setInputReceita] = useState("")
 
-  // Semana nova
   const [modalNovaSemana, setModalNovaSemana] = useState(false)
   const [novaSemanaInput, setNovaSemanaInput] = useState("")
 
+  // ── Carrega dados do Sheets ao montar
   useEffect(() => {
-    const d = lerDespesas()
-    const r = lerReceitas()
-    setDespesas(d)
-    setReceitas(r)
+    async function carregar() {
+      setCarregando(true)
+      try {
+        const [rawDesp, rawRec] = await Promise.all([
+          sheetsGet("despesas"),
+          sheetsGet("receitas"),
+        ])
 
-    // Coleta semanas únicas + semana atual
-    const semanasUnicas = Array.from(new Set([semanaAtual(), ...d.map(x => x.semana)])).sort().reverse()
-    setSemanas(semanasUnicas)
+        const desp: Despesa[] = (rawDesp || []).map((r: any) => ({
+          id: String(r.id),
+          nome: String(r.nome),
+          valor: Number(r.valor),
+          status: r.status as StatusDespesa,
+          semana: String(r.semana),
+          categoria: String(r.categoria),
+          criadaEm: String(r.criadaEm),
+        }))
+
+        const rec: Record<string, number> = {}
+        ;(rawRec || []).forEach((r: any) => {
+          rec[String(r.semana)] = Number(r.valor)
+        })
+
+        setDespesas(desp)
+        setReceitas(rec)
+
+        const semanasUnicas = Array.from(
+          new Set([semanaAtual(), ...desp.map(x => x.semana)])
+        ).sort().reverse()
+        setSemanas(semanasUnicas)
+      } catch (e) {
+        console.error("Erro ao carregar do Sheets:", e)
+      } finally {
+        setCarregando(false)
+      }
+    }
+    carregar()
   }, [])
 
-  // ── Despesas da semana selecionada
+  // ── Derived
   const despSemana = despesas.filter(d => d.semana === semanaSel)
   const receitaSemana = receitas[semanaSel] || 0
   const totalPago = despSemana.filter(d => d.status === "PAGO").reduce((a, d) => a + d.valor, 0)
   const totalPendente = despSemana.filter(d => d.status === "PENDENTE").reduce((a, d) => a + d.valor, 0)
-  const totalCancelado = despSemana.filter(d => d.status === "CANCELADO").reduce((a, d) => a + d.valor, 0)
   const totalDespesas = totalPago + totalPendente
   const lucroLiquido = receitaSemana - totalDespesas
   const maiorDespesa = despSemana.filter(d => d.status !== "CANCELADO").sort((a, b) => b.valor - a.valor)[0]
 
-  // ── Dados para gráfico comparativo (últimas 8 semanas)
   const dadosComparativo: SemanaFinanceira[] = semanas.slice(0, 8).reverse().map(s => {
     const ds = despesas.filter(d => d.semana === s)
     const rec = receitas[s] || 0
@@ -125,18 +150,24 @@ export function AbaDespesas() {
     return { semana: s, receita: rec, despesas: desp, lucro: rec - desp }
   })
 
-  // ── Dados por categoria (pizza fake via barras)
   const porCategoria = despSemana.filter(d => d.status !== "CANCELADO").reduce((acc, d) => {
     acc[d.categoria] = (acc[d.categoria] || 0) + d.valor
     return acc
   }, {} as Record<string, number>)
   const dadosCategoria = Object.entries(porCategoria).map(([cat, val]) => ({ cat, val })).sort((a, b) => b.val - a.val)
 
-  function salvar(novas: Despesa[]) {
-    setDespesas(novas)
-    salvarDespesas(novas)
-    // atualiza semanas
-    const s = Array.from(new Set([semanaAtual(), semanaSel, ...novas.map(x => x.semana)])).sort().reverse()
+  // ── Salvar despesa (upsert)
+  async function salvarDespesa(d: Despesa) {
+    await sheetsPost({ aba: "despesas", acao: "upsert", dados: { id: d.id, nome: d.nome, valor: d.valor, status: d.status, semana: d.semana, categoria: d.categoria, criadaEm: d.criadaEm } })
+  }
+
+  // ── Excluir despesa
+  async function excluirDespesaSheets(id: string) {
+    await sheetsPost({ aba: "despesas", acao: "delete", dados: { campo: "id", valor: id } })
+  }
+
+  function atualizarSemanas(lista: Despesa[]) {
+    const s = Array.from(new Set([semanaAtual(), semanaSel, ...lista.map(x => x.semana)])).sort().reverse()
     setSemanas(s)
   }
 
@@ -157,7 +188,7 @@ export function AbaDespesas() {
     setFormAberto(true)
   }
 
-  function confirmarForm() {
+  async function confirmarForm() {
     if (!formNome.trim() || !formValor) return
     const val = parseFloat(formValor.replace(",", "."))
     if (isNaN(val)) return
@@ -166,33 +197,45 @@ export function AbaDespesas() {
       const novas = despesas.map(d => d.id === editandoId
         ? { ...d, nome: formNome.trim(), valor: val, categoria: formCategoria, status: formStatus }
         : d)
-      salvar(novas)
+      setDespesas(novas)
+      atualizarSemanas(novas)
+      const atualizada = novas.find(d => d.id === editandoId)!
+      await salvarDespesa(atualizada)
     } else {
       const nova: Despesa = {
         id: gerarId(), nome: formNome.trim(), valor: val,
         status: formStatus, semana: semanaSel,
         categoria: formCategoria, criadaEm: new Date().toISOString()
       }
-      salvar([...despesas, nova])
+      const novas = [...despesas, nova]
+      setDespesas(novas)
+      atualizarSemanas(novas)
+      await salvarDespesa(nova)
     }
     setFormAberto(false)
   }
 
-  function excluir(id: string) {
-    salvar(despesas.filter(d => d.id !== id))
+  async function excluir(id: string) {
+    const novas = despesas.filter(d => d.id !== id)
+    setDespesas(novas)
+    atualizarSemanas(novas)
+    await excluirDespesaSheets(id)
   }
 
-  function alterarStatus(id: string, status: StatusDespesa) {
-    salvar(despesas.map(d => d.id === id ? { ...d, status } : d))
+  async function alterarStatus(id: string, status: StatusDespesa) {
+    const novas = despesas.map(d => d.id === id ? { ...d, status } : d)
+    setDespesas(novas)
+    const atualizada = novas.find(d => d.id === id)!
+    await salvarDespesa(atualizada)
   }
 
-  function salvarReceita() {
+  async function salvarReceita() {
     const val = parseFloat(inputReceita.replace(",", "."))
     if (isNaN(val)) return
     const novas = { ...receitas, [semanaSel]: val }
     setReceitas(novas)
-    salvarReceitas(novas)
     setEditandoReceita(false)
+    await sheetsPost({ aba: "receitas", acao: "upsert-receita", dados: { semana: semanaSel, valor: val } })
   }
 
   function adicionarCategoria() {
@@ -215,30 +258,27 @@ export function AbaDespesas() {
     setNovaSemanaInput("")
   }
 
-  // ── EXCLUIR SEMANA
-  function excluirSemana() {
+  async function excluirSemana() {
     if (!window.confirm(`Excluir a semana "${semanaSel}" e todas as suas despesas?`)) return
     const novasDespesas = despesas.filter(d => d.semana !== semanaSel)
-    salvar(novasDespesas)
+    setDespesas(novasDespesas)
     const novasReceitas = { ...receitas }
     delete novasReceitas[semanaSel]
     setReceitas(novasReceitas)
-    salvarReceitas(novasReceitas)
     const novasSemanas = semanas.filter(s => s !== semanaSel)
     const lista = novasSemanas.length ? novasSemanas : [semanaAtual()]
     setSemanas(lista)
     setSemanaSel(lista[0])
+    await sheetsPost({ aba: "despesas", acao: "delete-semana", dados: { semana: semanaSel } })
+    await sheetsPost({ aba: "receitas", acao: "delete", dados: { campo: "semana", valor: semanaSel } })
   }
 
-  // ── EXPORTAR CSV DA SEMANA
   function exportarCSVSemana() {
     const cabecalho = ["Nome", "Categoria", "Valor (R$)", "Status", "Semana", "Criada em"]
     const linhas = despSemana.map(d => [
-      d.nome,
-      d.categoria,
+      d.nome, d.categoria,
       d.valor.toFixed(2).replace(".", ","),
-      d.status,
-      d.semana,
+      d.status, d.semana,
       new Date(d.criadaEm).toLocaleString("pt-BR")
     ])
     const conteudo = [cabecalho, ...linhas]
@@ -259,6 +299,16 @@ export function AbaDespesas() {
     CANCELADO: { label: "Cancelado", bg: "rgba(248,113,113,0.1)", color: "#f87171", border: "rgba(248,113,113,0.25)" },
   }
 
+  if (carregando) {
+    return (
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: 300, color: "#555", fontSize: 14, gap: 12 }}>
+        <RefreshCw size={16} style={{ animation: "spin 1s linear infinite" }} />
+        Carregando dados...
+        <style>{`@keyframes spin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }`}</style>
+      </div>
+    )
+  }
+
   return (
     <div style={{ padding: "32px 40px", maxWidth: 1600, margin: "0 auto" }}>
 
@@ -274,29 +324,18 @@ export function AbaDespesas() {
             {semanas.map(s => <option key={s} value={s}>{s}</option>)}
           </select>
 
-          {/* Nova semana */}
-          <button
-            onClick={() => setModalNovaSemana(true)}
-            style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 8, border: "1px solid rgba(255,216,77,0.25)", background: "rgba(255,216,77,0.08)", color: "#FFD84D", fontFamily: "DM Sans", fontSize: 12, fontWeight: 600, cursor: "pointer" }}
-          >
+          <button onClick={() => setModalNovaSemana(true)}
+            style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 8, border: "1px solid rgba(255,216,77,0.25)", background: "rgba(255,216,77,0.08)", color: "#FFD84D", fontFamily: "DM Sans", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
             <Plus size={13} /> Nova semana
           </button>
 
-          {/* Excluir semana */}
-          <button
-            onClick={excluirSemana}
-            style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 8, border: "1px solid rgba(239,83,80,0.25)", background: "rgba(239,83,80,0.08)", color: "#f87171", fontFamily: "DM Sans", fontSize: 12, fontWeight: 600, cursor: "pointer" }}
-            title="Excluir semana e todas as despesas"
-          >
+          <button onClick={excluirSemana}
+            style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 8, border: "1px solid rgba(239,83,80,0.25)", background: "rgba(239,83,80,0.08)", color: "#f87171", fontFamily: "DM Sans", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
             <Trash2 size={13} /> Excluir semana
           </button>
 
-          {/* Exportar CSV */}
-          <button
-            onClick={exportarCSVSemana}
-            style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 8, border: "1px solid rgba(100,181,246,0.25)", background: "rgba(100,181,246,0.08)", color: "#90caf9", fontFamily: "DM Sans", fontSize: 12, fontWeight: 600, cursor: "pointer" }}
-            title="Exportar despesas da semana como CSV"
-          >
+          <button onClick={exportarCSVSemana}
+            style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 8, border: "1px solid rgba(100,181,246,0.25)", background: "rgba(100,181,246,0.08)", color: "#90caf9", fontFamily: "DM Sans", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
             <Download size={13} /> Exportar CSV
           </button>
         </div>
@@ -306,14 +345,9 @@ export function AbaDespesas() {
           <span style={{ fontSize: 11, color: "#555", textTransform: "uppercase", letterSpacing: 1 }}>Receita OL</span>
           {editandoReceita ? (
             <>
-              <input
-                autoFocus
-                value={inputReceita}
-                onChange={e => setInputReceita(e.target.value)}
-                onKeyDown={e => e.key === "Enter" && salvarReceita()}
-                placeholder="0,00"
-                style={{ background: "transparent", border: "none", borderBottom: "1px solid rgba(74,222,128,0.4)", color: "#4ade80", fontFamily: "DM Sans", fontSize: 16, fontWeight: 700, width: 100, outline: "none", textAlign: "right" }}
-              />
+              <input autoFocus value={inputReceita} onChange={e => setInputReceita(e.target.value)}
+                onKeyDown={e => e.key === "Enter" && salvarReceita()} placeholder="0,00"
+                style={{ background: "transparent", border: "none", borderBottom: "1px solid rgba(74,222,128,0.4)", color: "#4ade80", fontFamily: "DM Sans", fontSize: 16, fontWeight: 700, width: 100, outline: "none", textAlign: "right" }} />
               <button onClick={salvarReceita} style={{ background: "none", border: "none", color: "#4ade80", cursor: "pointer", display: "flex" }}><Check size={16} /></button>
               <button onClick={() => setEditandoReceita(false)} style={{ background: "none", border: "none", color: "#555", cursor: "pointer", display: "flex" }}><X size={14} /></button>
             </>
@@ -335,11 +369,11 @@ export function AbaDespesas() {
       {/* ── KPI CARDS ──────────────────────────────────────── */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 14, marginBottom: 28 }}>
         {[
-          { label: "Receita", value: receitaSemana, color: "#4ade80", icon: <TrendingUp size={18} color="#4ade80" />, prefix: "top: 0; background: #4ade80" },
-          { label: "Despesas pagas", value: totalPago, color: "#f87171", icon: <TrendingDown size={18} color="#f87171" />, prefix: "top: 0; background: #f87171" },
-          { label: "Pendente", value: totalPendente, color: "#fbbf24", icon: <AlertCircle size={18} color="#fbbf24" />, prefix: "top: 0; background: #fbbf24" },
-          { label: "Lucro líquido", value: lucroLiquido, color: lucroLiquido >= 0 ? "#4ade80" : "#f87171", icon: <Wallet size={18} color={lucroLiquido >= 0 ? "#4ade80" : "#f87171"} />, prefix: `top: 0; background: ${lucroLiquido >= 0 ? "#4ade80" : "#f87171"}` },
-          { label: "Maior despesa", value: maiorDespesa?.valor || 0, color: "#a78bfa", sub: maiorDespesa?.nome, icon: <DollarSign size={18} color="#a78bfa" />, prefix: "top: 0; background: #a78bfa" },
+          { label: "Receita", value: receitaSemana, color: "#4ade80", icon: <TrendingUp size={18} color="#4ade80" /> },
+          { label: "Despesas pagas", value: totalPago, color: "#f87171", icon: <TrendingDown size={18} color="#f87171" /> },
+          { label: "Pendente", value: totalPendente, color: "#fbbf24", icon: <AlertCircle size={18} color="#fbbf24" /> },
+          { label: "Lucro líquido", value: lucroLiquido, color: lucroLiquido >= 0 ? "#4ade80" : "#f87171", icon: <Wallet size={18} color={lucroLiquido >= 0 ? "#4ade80" : "#f87171"} /> },
+          { label: "Maior despesa", value: maiorDespesa?.valor || 0, color: "#a78bfa", sub: maiorDespesa?.nome, icon: <DollarSign size={18} color="#a78bfa" /> },
         ].map((k, i) => (
           <div key={i} style={{ background: "#0f0f0f", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 14, padding: "18px 16px", position: "relative", overflow: "hidden" }}>
             <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, background: k.color }} />
@@ -357,11 +391,8 @@ export function AbaDespesas() {
 
       {/* ── GRÁFICOS ────────────────────────────────────────── */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 28 }}>
-        {/* Comparativo semanal */}
         <div style={{ background: "#0f0f0f", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 14, padding: 24 }}>
-          <div style={{ fontFamily: "Syne, sans-serif", fontSize: 12, fontWeight: 700, color: "#fff", textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 20 }}>
-            Comparativo Semanal
-          </div>
+          <div style={{ fontFamily: "Syne, sans-serif", fontSize: 12, fontWeight: 700, color: "#fff", textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 20 }}>Comparativo Semanal</div>
           <ResponsiveContainer width="100%" height={200}>
             <BarChart data={dadosComparativo} barSize={18} barGap={4}>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
@@ -375,11 +406,8 @@ export function AbaDespesas() {
           </ResponsiveContainer>
         </div>
 
-        {/* Evolução lucro */}
         <div style={{ background: "#0f0f0f", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 14, padding: 24 }}>
-          <div style={{ fontFamily: "Syne, sans-serif", fontSize: 12, fontWeight: 700, color: "#fff", textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 20 }}>
-            Evolução do Lucro
-          </div>
+          <div style={{ fontFamily: "Syne, sans-serif", fontSize: 12, fontWeight: 700, color: "#fff", textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 20 }}>Evolução do Lucro</div>
           <ResponsiveContainer width="100%" height={200}>
             <LineChart data={dadosComparativo}>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
@@ -392,12 +420,9 @@ export function AbaDespesas() {
         </div>
       </div>
 
-      {/* Por categoria */}
       {dadosCategoria.length > 0 && (
         <div style={{ background: "#0f0f0f", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 14, padding: 24, marginBottom: 28 }}>
-          <div style={{ fontFamily: "Syne, sans-serif", fontSize: 12, fontWeight: 700, color: "#fff", textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 20 }}>
-            Despesas por Categoria
-          </div>
+          <div style={{ fontFamily: "Syne, sans-serif", fontSize: 12, fontWeight: 700, color: "#fff", textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 20 }}>Despesas por Categoria</div>
           <ResponsiveContainer width="100%" height={140}>
             <BarChart data={dadosCategoria} layout="vertical" barSize={16}>
               <XAxis type="number" tick={{ fill: "#444", fontSize: 10 }} axisLine={false} tickLine={false} />
@@ -419,112 +444,76 @@ export function AbaDespesas() {
             <span style={{ fontSize: 12, color: "#555", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.07)", padding: "4px 10px", borderRadius: 20 }}>
               {despSemana.length} item{despSemana.length !== 1 ? "s" : ""}
             </span>
-            <button
-              onClick={() => abrirForm()}
+            <button onClick={() => abrirForm()}
               style={{ display: "flex", alignItems: "center", gap: 7, padding: "8px 16px", borderRadius: 8, border: "none", background: "linear-gradient(135deg, #7b1fa2, #9c27b0)", color: "#fff", fontFamily: "DM Sans", fontSize: 13, fontWeight: 600, cursor: "pointer", transition: "all 0.2s" }}
               onMouseEnter={e => (e.currentTarget.style.transform = "translateY(-1px)")}
-              onMouseLeave={e => (e.currentTarget.style.transform = "translateY(0)")}
-            >
+              onMouseLeave={e => (e.currentTarget.style.transform = "translateY(0)")}>
               <Plus size={14} /> Adicionar despesa
             </button>
           </div>
         </div>
 
-        {/* FORM inline */}
         {formAberto && (
           <div style={{ padding: "20px 24px", background: "rgba(156,39,176,0.04)", borderBottom: "1px solid rgba(156,39,176,0.15)" }}>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 140px 1fr 160px auto", gap: 12, alignItems: "end" }}>
-              {/* Nome */}
               <div>
                 <div style={{ fontSize: 10, color: "#555", textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 }}>Nome da despesa</div>
-                <input
-                  autoFocus
-                  value={formNome}
-                  onChange={e => setFormNome(e.target.value)}
-                  placeholder="Ex: Aluguel galpão"
-                  style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid rgba(255,255,255,0.1)", background: "#161616", color: "#fff", fontFamily: "DM Sans", fontSize: 14, outline: "none" }}
-                />
+                <input autoFocus value={formNome} onChange={e => setFormNome(e.target.value)} placeholder="Ex: Aluguel galpão"
+                  style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid rgba(255,255,255,0.1)", background: "#161616", color: "#fff", fontFamily: "DM Sans", fontSize: 14, outline: "none" }} />
               </div>
-
-              {/* Valor */}
               <div>
                 <div style={{ fontSize: 10, color: "#555", textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 }}>Valor (R$)</div>
-                <input
-                  value={formValor}
-                  onChange={e => setFormValor(e.target.value)}
-                  placeholder="0,00"
-                  style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid rgba(255,255,255,0.1)", background: "#161616", color: "#fff", fontFamily: "DM Sans", fontSize: 14, outline: "none" }}
-                />
+                <input value={formValor} onChange={e => setFormValor(e.target.value)} placeholder="0,00"
+                  style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid rgba(255,255,255,0.1)", background: "#161616", color: "#fff", fontFamily: "DM Sans", fontSize: 14, outline: "none" }} />
               </div>
-
-              {/* Categoria */}
               <div>
                 <div style={{ fontSize: 10, color: "#555", textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 }}>Categoria</div>
                 <div style={{ display: "flex", gap: 6 }}>
                   {mostrarNovaCategoria ? (
                     <div style={{ display: "flex", gap: 6, flex: 1 }}>
-                      <input
-                        autoFocus
-                        value={novaCategoria}
-                        onChange={e => setNovaCategoria(e.target.value)}
-                        onKeyDown={e => e.key === "Enter" && adicionarCategoria()}
-                        placeholder="Nova categoria"
-                        style={{ flex: 1, padding: "10px 12px", borderRadius: 8, border: "1px solid rgba(255,216,77,0.3)", background: "#161616", color: "#fff", fontFamily: "DM Sans", fontSize: 14, outline: "none" }}
-                      />
+                      <input autoFocus value={novaCategoria} onChange={e => setNovaCategoria(e.target.value)}
+                        onKeyDown={e => e.key === "Enter" && adicionarCategoria()} placeholder="Nova categoria"
+                        style={{ flex: 1, padding: "10px 12px", borderRadius: 8, border: "1px solid rgba(255,216,77,0.3)", background: "#161616", color: "#fff", fontFamily: "DM Sans", fontSize: 14, outline: "none" }} />
                       <button onClick={adicionarCategoria} style={{ padding: "10px 12px", borderRadius: 8, border: "none", background: "rgba(255,216,77,0.15)", color: "#FFD84D", cursor: "pointer" }}><Check size={14} /></button>
                       <button onClick={() => setMostrarNovaCategoria(false)} style={{ padding: "10px 12px", borderRadius: 8, border: "none", background: "rgba(255,255,255,0.05)", color: "#666", cursor: "pointer" }}><X size={14} /></button>
                     </div>
                   ) : (
                     <>
-                      <select
-                        value={formCategoria}
-                        onChange={e => setFormCategoria(e.target.value)}
-                        style={{ flex: 1, padding: "10px 12px", borderRadius: 8, border: "1px solid rgba(255,255,255,0.1)", background: "#161616", color: "#fff", fontFamily: "DM Sans", fontSize: 14, outline: "none", cursor: "pointer" }}
-                      >
+                      <select value={formCategoria} onChange={e => setFormCategoria(e.target.value)}
+                        style={{ flex: 1, padding: "10px 12px", borderRadius: 8, border: "1px solid rgba(255,255,255,0.1)", background: "#161616", color: "#fff", fontFamily: "DM Sans", fontSize: 14, outline: "none", cursor: "pointer" }}>
                         {categorias.map(c => <option key={c} value={c}>{c}</option>)}
                       </select>
-                      <button
-                        onClick={() => setMostrarNovaCategoria(true)}
-                        title="Nova categoria"
-                        style={{ padding: "10px 12px", borderRadius: 8, border: "1px solid rgba(255,216,77,0.25)", background: "rgba(255,216,77,0.08)", color: "#FFD84D", cursor: "pointer", display: "flex", alignItems: "center" }}
-                      ><Plus size={14} /></button>
+                      <button onClick={() => setMostrarNovaCategoria(true)} title="Nova categoria"
+                        style={{ padding: "10px 12px", borderRadius: 8, border: "1px solid rgba(255,216,77,0.25)", background: "rgba(255,216,77,0.08)", color: "#FFD84D", cursor: "pointer", display: "flex", alignItems: "center" }}>
+                        <Plus size={14} />
+                      </button>
                     </>
                   )}
                 </div>
               </div>
-
-              {/* Status */}
               <div>
                 <div style={{ fontSize: 10, color: "#555", textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 }}>Status</div>
-                <select
-                  value={formStatus}
-                  onChange={e => setFormStatus(e.target.value as StatusDespesa)}
-                  style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid rgba(255,255,255,0.1)", background: "#161616", color: "#fff", fontFamily: "DM Sans", fontSize: 14, outline: "none", cursor: "pointer" }}
-                >
+                <select value={formStatus} onChange={e => setFormStatus(e.target.value as StatusDespesa)}
+                  style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid rgba(255,255,255,0.1)", background: "#161616", color: "#fff", fontFamily: "DM Sans", fontSize: 14, outline: "none", cursor: "pointer" }}>
                   <option value="PENDENTE">Pendente</option>
                   <option value="PAGO">Pago</option>
                   <option value="CANCELADO">Cancelado</option>
                 </select>
               </div>
-
-              {/* Ações */}
               <div style={{ display: "flex", gap: 8 }}>
-                <button
-                  onClick={confirmarForm}
-                  style={{ padding: "10px 18px", borderRadius: 8, border: "none", background: "linear-gradient(135deg, #7b1fa2, #9c27b0)", color: "#fff", fontFamily: "DM Sans", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
-                >
+                <button onClick={confirmarForm}
+                  style={{ padding: "10px 18px", borderRadius: 8, border: "none", background: "linear-gradient(135deg, #7b1fa2, #9c27b0)", color: "#fff", fontFamily: "DM Sans", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
                   {editandoId ? "Salvar" : "Adicionar"}
                 </button>
-                <button
-                  onClick={() => setFormAberto(false)}
-                  style={{ padding: "10px 12px", borderRadius: 8, border: "1px solid rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.04)", color: "#666", cursor: "pointer" }}
-                ><X size={14} /></button>
+                <button onClick={() => setFormAberto(false)}
+                  style={{ padding: "10px 12px", borderRadius: 8, border: "1px solid rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.04)", color: "#666", cursor: "pointer" }}>
+                  <X size={14} />
+                </button>
               </div>
             </div>
           </div>
         )}
 
-        {/* Tabela */}
         <div style={{ overflowX: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead>
@@ -536,33 +525,23 @@ export function AbaDespesas() {
             </thead>
             <tbody>
               {despSemana.length === 0 ? (
-                <tr>
-                  <td colSpan={5} style={{ padding: "40px 20px", textAlign: "center", color: "#333", fontSize: 14 }}>
-                    Nenhuma despesa registrada para esta semana
-                  </td>
-                </tr>
+                <tr><td colSpan={5} style={{ padding: "40px 20px", textAlign: "center", color: "#333", fontSize: 14 }}>Nenhuma despesa registrada para esta semana</td></tr>
               ) : despSemana.map(d => {
                 const sc = statusConfig[d.status]
                 return (
                   <tr key={d.id} style={{ borderBottom: "1px solid rgba(255,255,255,0.04)", opacity: d.status === "CANCELADO" ? 0.4 : 1 }}
                     onMouseEnter={e => (e.currentTarget.style.background = "rgba(255,255,255,0.02)")}
-                    onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
-                  >
+                    onMouseLeave={e => (e.currentTarget.style.background = "transparent")}>
                     <td style={{ padding: "14px 20px", fontSize: 14, color: "#e8e8f0", fontWeight: 500 }}>{d.nome}</td>
                     <td style={{ padding: "14px 20px" }}>
-                      <span style={{ fontSize: 11, padding: "3px 10px", borderRadius: 20, background: "rgba(167,139,250,0.08)", color: "#a78bfa", border: "1px solid rgba(167,139,250,0.2)" }}>
-                        {d.categoria}
-                      </span>
+                      <span style={{ fontSize: 11, padding: "3px 10px", borderRadius: 20, background: "rgba(167,139,250,0.08)", color: "#a78bfa", border: "1px solid rgba(167,139,250,0.2)" }}>{d.categoria}</span>
                     </td>
                     <td style={{ padding: "14px 20px", fontFamily: "Syne, sans-serif", fontSize: 15, fontWeight: 700, color: "#fff" }}>
                       R$ {d.valor.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
                     </td>
                     <td style={{ padding: "14px 20px" }}>
-                      <select
-                        value={d.status}
-                        onChange={e => alterarStatus(d.id, e.target.value as StatusDespesa)}
-                        style={{ padding: "5px 10px", borderRadius: 20, border: `1px solid ${sc.border}`, background: sc.bg, color: sc.color, fontFamily: "DM Sans", fontSize: 12, fontWeight: 600, cursor: "pointer", outline: "none" }}
-                      >
+                      <select value={d.status} onChange={e => alterarStatus(d.id, e.target.value as StatusDespesa)}
+                        style={{ padding: "5px 10px", borderRadius: 20, border: `1px solid ${sc.border}`, background: sc.bg, color: sc.color, fontFamily: "DM Sans", fontSize: 12, fontWeight: 600, cursor: "pointer", outline: "none" }}>
                         <option value="PAGO">✓ Pago</option>
                         <option value="PENDENTE">⏳ Pendente</option>
                         <option value="CANCELADO">✗ Cancelado</option>
@@ -570,16 +549,18 @@ export function AbaDespesas() {
                     </td>
                     <td style={{ padding: "14px 20px" }}>
                       <div style={{ display: "flex", gap: 8 }}>
-                        <button onClick={() => { abrirForm(d) }}
+                        <button onClick={() => abrirForm(d)}
                           style={{ padding: "6px 10px", borderRadius: 6, border: "1px solid rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.04)", color: "#aaa", cursor: "pointer", display: "flex", alignItems: "center", transition: "all 0.2s" }}
                           onMouseEnter={e => { e.currentTarget.style.borderColor = "rgba(156,39,176,0.4)"; e.currentTarget.style.color = "#ce93d8" }}
-                          onMouseLeave={e => { e.currentTarget.style.borderColor = "rgba(255,255,255,0.08)"; e.currentTarget.style.color = "#aaa" }}
-                        ><Edit2 size={13} /></button>
+                          onMouseLeave={e => { e.currentTarget.style.borderColor = "rgba(255,255,255,0.08)"; e.currentTarget.style.color = "#aaa" }}>
+                          <Edit2 size={13} />
+                        </button>
                         <button onClick={() => excluir(d.id)}
                           style={{ padding: "6px 10px", borderRadius: 6, border: "1px solid rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.04)", color: "#aaa", cursor: "pointer", display: "flex", alignItems: "center", transition: "all 0.2s" }}
                           onMouseEnter={e => { e.currentTarget.style.borderColor = "rgba(239,83,80,0.4)"; e.currentTarget.style.color = "#ef5350" }}
-                          onMouseLeave={e => { e.currentTarget.style.borderColor = "rgba(255,255,255,0.08)"; e.currentTarget.style.color = "#aaa" }}
-                        ><Trash2 size={13} /></button>
+                          onMouseLeave={e => { e.currentTarget.style.borderColor = "rgba(255,255,255,0.08)"; e.currentTarget.style.color = "#aaa" }}>
+                          <Trash2 size={13} />
+                        </button>
                       </div>
                     </td>
                   </tr>
@@ -603,7 +584,6 @@ export function AbaDespesas() {
         </div>
       </div>
 
-      {/* Modal nova semana */}
       {modalNovaSemana && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", backdropFilter: "blur(4px)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center" }}
           onClick={() => setModalNovaSemana(false)}>
@@ -612,14 +592,9 @@ export function AbaDespesas() {
             <div style={{ fontFamily: "Syne, sans-serif", fontSize: 18, fontWeight: 700, color: "#fff" }}>Nova Semana</div>
             <div>
               <div style={{ fontSize: 11, color: "#555", textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>Nome da semana</div>
-              <input
-                autoFocus
-                value={novaSemanaInput}
-                onChange={e => setNovaSemanaInput(e.target.value)}
-                onKeyDown={e => e.key === "Enter" && criarSemana()}
-                placeholder="Ex: 10/03 - 16/03"
-                style={{ width: "100%", padding: "12px 14px", borderRadius: 8, border: "1px solid rgba(255,255,255,0.1)", background: "#161616", color: "#fff", fontFamily: "DM Sans", fontSize: 14, outline: "none" }}
-              />
+              <input autoFocus value={novaSemanaInput} onChange={e => setNovaSemanaInput(e.target.value)}
+                onKeyDown={e => e.key === "Enter" && criarSemana()} placeholder="Ex: 10/03 - 16/03"
+                style={{ width: "100%", padding: "12px 14px", borderRadius: 8, border: "1px solid rgba(255,255,255,0.1)", background: "#161616", color: "#fff", fontFamily: "DM Sans", fontSize: 14, outline: "none" }} />
             </div>
             <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
               <button onClick={() => setModalNovaSemana(false)}
@@ -638,11 +613,8 @@ export function AbaDespesas() {
   )
 }
 
-// ─── PAINEL PRINCIPAL (com abas) ────────────────────────────────────────────
-import {
-  BarChart as BarChartIcon,
-  Receipt
-} from "lucide-react"
+// ─── PAINEL PRINCIPAL ────────────────────────────────────────────────────────
+import { Receipt } from "lucide-react"
 
 export default function Painel() {
   const [aba, setAba] = useState<"notas" | "despesas">("notas")
@@ -666,27 +638,19 @@ export default function Painel() {
   const router = useRouter()
 
   useEffect(() => {
-    fetch("/api/notas")
-      .then(res => res.json())
-      .then((data) => { const lista = Array.isArray(data) ? data : []; setDados(lista) })
-      .catch(() => setDados([]))
+    fetch("/api/notas").then(res => res.json()).then((data) => { setDados(Array.isArray(data) ? data : []) }).catch(() => setDados([]))
   }, [])
 
   useEffect(() => {
-    fetch("/api/historico")
-      .then(res => res.json())
-      .then(data => { if (data.semanas) setSemanas(data.semanas) })
-      .catch(() => {})
+    fetch("/api/historico").then(res => res.json()).then(data => { if (data.semanas) setSemanas(data.semanas) }).catch(() => {})
   }, [])
 
   async function sincronizar() {
     setSincronizando(true); setMsgSalvar("")
     try {
-      const timestamp = Date.now()
-      const resNotas = await fetch(`/api/notas?t=${timestamp}`, { method: "GET", cache: "no-store", headers: { "Cache-Control": "no-cache, no-store, must-revalidate", "Pragma": "no-cache" } })
+      const resNotas = await fetch(`/api/notas?t=${Date.now()}`, { method: "GET", cache: "no-store", headers: { "Cache-Control": "no-cache, no-store, must-revalidate", "Pragma": "no-cache" } })
       if (!resNotas.ok) throw new Error("Erro ao buscar notas")
-      const listaAtualizada = await resNotas.json()
-      setDados(Array.isArray(listaAtualizada) ? listaAtualizada : [])
+      setDados(Array.isArray(await resNotas.json()) ? await resNotas.json() : [])
       setMsgSalvar("✓ Sincronização concluída com sucesso!")
     } catch (e: any) { setMsgSalvar(`✗ Erro: ${e.message}`) }
     finally { setSincronizando(false); setTimeout(() => setMsgSalvar(""), 5000) }
@@ -791,14 +755,11 @@ export default function Painel() {
         .sincronizando svg { animation: syncRotate 1s linear infinite; }
         .msg-ok { font-size:12px; padding:6px 12px; border-radius:6px; background:rgba(76,175,80,0.08); border:1px solid rgba(76,175,80,0.2); color:#66bb6a; }
         .msg-err { font-size:12px; padding:6px 12px; border-radius:6px; background:rgba(239,83,80,0.08); border:1px solid rgba(239,83,80,0.2); color:#ef5350; }
-
-        /* ABAS */
         .tabs-bar { display:flex; align-items:center; gap:2px; padding:0 40px; border-bottom:1px solid rgba(255,255,255,0.06); background:rgba(10,10,15,0.8); }
         .tab-btn { display:flex; align-items:center; gap:8px; padding:14px 20px; border:none; background:transparent; color:#555; font-family:'DM Sans',sans-serif; font-size:13px; font-weight:600; cursor:pointer; border-bottom:2px solid transparent; transition:all 0.2s; margin-bottom:-1px; }
         .tab-btn:hover { color:#aaa; }
         .tab-btn.ativa { color:#fff; border-bottom-color:#9c27b0; }
         .tab-btn.ativa-gold { color:#FFD84D; border-bottom-color:#FFD84D; }
-
         .stats-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:16px; margin-bottom:28px; }
         .stat-card { background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.07); border-radius:14px; padding:22px 24px; display:flex; align-items:center; gap:16px; cursor:pointer; transition:all 0.2s; position:relative; overflow:hidden; }
         .stat-card:hover { transform:translateY(-2px); }
@@ -842,13 +803,13 @@ export default function Painel() {
         .link-nota:hover { background:rgba(156,39,176,0.18); }
         .btn-whatsapp { display:inline-flex; align-items:center; gap:5px; padding:5px 10px; border-radius:6px; border:1px solid rgba(37,211,102,0.25); background:rgba(37,211,102,0.08); color:#25d366; text-decoration:none; font-size:12px; font-weight:600; transition:all 0.2s; }
         .btn-whatsapp:hover { background:rgba(37,211,102,0.18); transform:translateY(-1px); }
-        .btn-telegram { display:inline-flex; align-items:center; gap:5px; padding:5px 10px; border-radius:6px; border:1px solid rgba(41,182,246,0.25); background:rgba(41,182,246,0.08); color:#29b6f6; text-decoration:none; font-size:12px; font-weight:600; transition:all 0.2s; cursor:pointer; font-family:'DM Sans',sans-serif; border:1px solid rgba(41,182,246,0.25); }
+        .btn-telegram { display:inline-flex; align-items:center; gap:5px; padding:5px 10px; border-radius:6px; background:rgba(41,182,246,0.08); color:#29b6f6; text-decoration:none; font-size:12px; font-weight:600; transition:all 0.2s; cursor:pointer; font-family:'DM Sans',sans-serif; border:1px solid rgba(41,182,246,0.25); }
         .btn-telegram:hover { background:rgba(41,182,246,0.18); transform:translateY(-1px); }
         .acoes-cell { display:flex; flex-direction:column; gap:5px; }
         .sem-telefone { font-size:11px; color:#444; font-style:italic; }
         .nfse-num { font-family:'Syne',sans-serif; font-size:13px; font-weight:700; color:#fff; }
         .validacao-badge { display:inline-flex; align-items:center; gap:6px; padding:5px 12px; border-radius:20px; font-size:12px; font-weight:600; border:1px solid; }
-        .modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.7); backdrop-filter:blur(4px); z-index:1000; display:flex; align-items:center; justify:center; }
+        .modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.7); backdrop-filter:blur(4px); z-index:1000; display:flex; align-items:center; justify-content:center; }
         .modal-box { background:#13131a; border:1px solid rgba(255,255,255,0.1); border-radius:16px; padding:32px; width:380px; display:flex; flex-direction:column; gap:20px; }
         .modal-title { font-family:'Syne',sans-serif; font-size:18px; font-weight:700; color:#fff; }
         .modal-label { font-size:11px; color:#555; text-transform:uppercase; letter-spacing:1px; margin-bottom:8px; }
@@ -858,7 +819,6 @@ export default function Painel() {
       `}</style>
 
       <div className="painel-root">
-        {/* HEADER */}
         <header className="header">
           <div className="header-brand">
             <div className="header-logo">🦂</div>
@@ -881,7 +841,6 @@ export default function Painel() {
           </div>
         </header>
 
-        {/* ABAS */}
         <div className="tabs-bar">
           <button className={`tab-btn ${aba === "notas" ? "ativa" : ""}`} onClick={() => setAba("notas")}>
             <Users size={15} /> Notas Fiscais
@@ -891,7 +850,6 @@ export default function Painel() {
           </button>
         </div>
 
-        {/* CONTEÚDO NOTAS */}
         {aba === "notas" && (
           <main style={{ padding: "36px 40px", maxWidth: 1600, margin: "0 auto" }}>
             {!avisoFechado && (
@@ -1024,7 +982,6 @@ export default function Painel() {
           </main>
         )}
 
-        {/* CONTEÚDO DESPESAS */}
         {aba === "despesas" && <AbaDespesas />}
       </div>
 
