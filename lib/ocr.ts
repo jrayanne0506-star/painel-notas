@@ -1,5 +1,5 @@
 import fetch from "node-fetch"
-import * as pdfjsLib from 'pdfjs-dist/build/pdf.js'
+import * as pdfjsLib from 'pdfjs-dist'
 
 async function baixarArquivo(link: string): Promise<Buffer> {
   const idMatch = link.match(/\/d\/([a-zA-Z0-9_-]+)/)
