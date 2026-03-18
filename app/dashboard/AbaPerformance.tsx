@@ -212,6 +212,7 @@ export function AbaPerformance() {
       if (json.dados?.length) {
         const reconstruido: EntregadorDia[] = json.dados.map((d: any) => ({
           ...d,
+          id: String(d.id ?? d.nome ?? ""),
           tempoOnline: Number(d.tempoOnline) || 0,
           aceitas: Number(d.aceitas) || 0,
           entregues: Number(d.entregues) || 0,
@@ -331,7 +332,12 @@ export function AbaPerformance() {
 
   const porEntregador = useMemo(() => {
     const map: Record<string, EntregadorDia[]> = {}
-    dadosFiltrados.forEach(d => { if (!map[d.nome]) map[d.nome] = []; map[d.nome].push(d) })
+    // Agrupa por id para evitar conflito com nomes iguais
+    dadosFiltrados.forEach(d => {
+      const chave = d.id || d.nome
+      if (!map[chave]) map[chave] = []
+      map[chave].push(d)
+    })
     return Object.entries(map).map(([nome, dias]) => ({
       nome, veiculo: dias[0]?.veiculo ?? "",
       diasTrabalhados: dias.filter(d => d.tempoOnline > 0 || d.aceitas > 0).length,
