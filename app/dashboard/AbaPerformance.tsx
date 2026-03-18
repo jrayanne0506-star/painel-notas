@@ -328,8 +328,8 @@ export function AbaPerformance() {
     dadosFiltrados.forEach(d => { if (!map[d.nome]) map[d.nome] = []; map[d.nome].push(d) })
     return Object.entries(map).map(([nome, dias]) => ({
       nome, veiculo: dias[0]?.veiculo ?? "",
-      diasTrabalhados: dias.length,
-      tempoOnline: avg(dias.map(d => d.tempoOnline)),
+      diasTrabalhados: dias.filter(d => d.tempoOnline > 0 || d.aceitas > 0).length,
+      tempoOnline: avg(dias.filter(d => d.tempoOnline > 0).map(d => d.tempoOnline)),
       aceitas: dias.reduce((a, d) => a + d.aceitas, 0),
       entregues: dias.reduce((a, d) => a + d.entregues, 0),
       canceladas: dias.reduce((a, d) => a + d.canceladas, 0),
@@ -338,7 +338,7 @@ export function AbaPerformance() {
       recusadasAuto: dias.reduce((a, d) => a + d.recusadasAuto, 0),
       taxaPontualidade: avg(dias.filter(d => d.taxaPontualidade > 0).map(d => d.taxaPontualidade)),
       tempoMedioEntrega: avg(dias.filter(d => d.tempoMedioEntrega > 0).map(d => d.tempoMedioEntrega)),
-      acima55min: avg(dias.map(d => d.acima55min)),
+      acima55min: avg(dias.filter(d => d.acima55min > 0).map(d => d.acima55min)),
     }))
   }, [dadosFiltrados])
 
@@ -356,12 +356,20 @@ export function AbaPerformance() {
     const canceladas = dadosFiltrados.reduce((a, d) => a + d.canceladas, 0)
     const recManual = dadosFiltrados.reduce((a, d) => a + d.recusadasManual, 0)
     const recAuto = dadosFiltrados.reduce((a, d) => a + d.recusadasAuto, 0)
+    const recTotal = recManual + recAuto
     const pont = dadosFiltrados.filter(d => d.taxaPontualidade > 0).map(d => d.taxaPontualidade)
+    const txEntrega = aceitas ? entregues / aceitas : 0
+    const txPontualidade = avg(pont)
     return {
       entregadores: new Set(dadosFiltrados.map(d => d.nome)).size,
-      entregues, aceitas, canceladas, recManual, recAuto,
-      txEntrega: aceitas ? entregues / aceitas : 0,
-      txPontualidade: avg(pont),
+      entregues, aceitas, canceladas, recManual, recAuto, recTotal,
+      txEntrega, txPontualidade,
+      subEntregues: aceitas ? `${((entregues / aceitas) * 100).toFixed(1)}% de aceitas` : null,
+      subCanceladas: aceitas ? `${((canceladas / aceitas) * 100).toFixed(1)}% de aceitas` : null,
+      subRecManual: recTotal ? `${((recManual / recTotal) * 100).toFixed(0)}% do total` : null,
+      subRecAuto: recTotal ? `${((recAuto / recTotal) * 100).toFixed(0)}% do total` : null,
+      subTxEntrega: txEntrega >= 0.95 ? "meta atingida" : txEntrega >= 0.85 ? "próximo da meta" : "abaixo da meta",
+      subPontualidade: txPontualidade >= 0.9 ? "excelente" : txPontualidade >= 0.7 ? "regular" : "atenção",
     }
   }, [dadosFiltrados])
 
@@ -584,14 +592,14 @@ export function AbaPerformance() {
       {/* ── KPIs ── */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(8, 1fr)", gap: 10, marginBottom: 22 }}>
         {[
-          { label: "Entregadores", value: kpis.entregadores, color: "#ce93d8", icon: <Users size={13} color="#ce93d8" />, fmt: "num" },
-          { label: "Aceitas", value: kpis.aceitas, color: "#90caf9", icon: <CheckCircle size={13} color="#90caf9" />, fmt: "num" },
-          { label: "Entregues", value: kpis.entregues, color: "#4ade80", icon: <TrendingUp size={13} color="#4ade80" />, fmt: "num" },
-          { label: "Canceladas", value: kpis.canceladas, color: "#f87171", icon: <X size={13} color="#f87171" />, fmt: "num" },
-          { label: "Rec. Manual", value: kpis.recManual, color: "#fb923c", icon: <Ban size={13} color="#fb923c" />, fmt: "num" },
-          { label: "Rec. Auto", value: kpis.recAuto, color: "#fbbf24", icon: <AlertTriangle size={13} color="#fbbf24" />, fmt: "num" },
-          { label: "Taxa Entrega", value: kpis.txEntrega, color: "#4ade80", icon: <CheckCircle size={13} color="#4ade80" />, fmt: "pct" },
-          { label: "Pontualidade", value: kpis.txPontualidade, color: "#a78bfa", icon: <Clock size={13} color="#a78bfa" />, fmt: "pct" },
+          { label: "Entregadores", value: kpis.entregadores, color: "#ce93d8", icon: <Users size={13} color="#ce93d8" />, fmt: "num", sub: null },
+          { label: "Aceitas", value: kpis.aceitas, color: "#90caf9", icon: <CheckCircle size={13} color="#90caf9" />, fmt: "num", sub: null },
+          { label: "Entregues", value: kpis.entregues, color: "#4ade80", icon: <TrendingUp size={13} color="#4ade80" />, fmt: "num", sub: kpis.subEntregues },
+          { label: "Canceladas", value: kpis.canceladas, color: "#f87171", icon: <X size={13} color="#f87171" />, fmt: "num", sub: kpis.subCanceladas },
+          { label: "Rec. Manual", value: kpis.recManual, color: "#fb923c", icon: <Ban size={13} color="#fb923c" />, fmt: "num", sub: kpis.subRecManual },
+          { label: "Rec. Auto", value: kpis.recAuto, color: "#fbbf24", icon: <AlertTriangle size={13} color="#fbbf24" />, fmt: "num", sub: kpis.subRecAuto },
+          { label: "Taxa Entrega", value: kpis.txEntrega, color: "#4ade80", icon: <CheckCircle size={13} color="#4ade80" />, fmt: "pct", sub: kpis.subTxEntrega },
+          { label: "Pontualidade", value: kpis.txPontualidade, color: "#a78bfa", icon: <Clock size={13} color="#a78bfa" />, fmt: "pct", sub: kpis.subPontualidade },
         ].map((k, i) => (
           <div key={i} style={{ background: "#0f0f0f", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 10, padding: "11px 13px", position: "relative", overflow: "hidden" }}>
             <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, background: k.color }} />
@@ -602,6 +610,11 @@ export function AbaPerformance() {
             <div style={{ fontFamily: "Bebas Neue, sans-serif", fontSize: 21, color: k.color, letterSpacing: 1 }}>
               {k.fmt === "pct" ? pct(k.value) : k.value.toLocaleString("pt-BR")}
             </div>
+            {k.sub && (
+              <div style={{ fontSize: 9, color: "#3a3a3a", marginTop: 3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                {k.sub}
+              </div>
+            )}
           </div>
         ))}
       </div>
