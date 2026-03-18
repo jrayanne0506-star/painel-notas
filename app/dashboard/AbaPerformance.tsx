@@ -146,14 +146,20 @@ export function AbaPerformance() {
   // ─── Carregar lista de semanas salvas ────────────────────────────────────
 
   useEffect(() => {
-    carregarSemanas()
+    carregarSemanas(true)
   }, [])
 
-  async function carregarSemanas() {
+  async function carregarSemanas(autoLoad = false) {
     try {
       const res = await fetch("/api/performance-sheets?acao=listar")
       const json = await res.json()
-      if (json.semanas) setSemanas(json.semanas)
+      if (json.semanas) {
+        setSemanas(json.semanas)
+        // Auto-load da semana mais recente ao abrir a página
+        if (autoLoad && json.semanas.length > 0) {
+          await verSemana(json.semanas[0])
+        }
+      }
     } catch {}
   }
 
