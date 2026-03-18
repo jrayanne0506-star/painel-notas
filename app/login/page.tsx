@@ -247,7 +247,7 @@ export default function Login() {
           <div className="login-brand">
             <span className="login-scorpion">🦂</span>
             <div className="login-title">Scorpions Delivery</div>
-            <div className="login-subtitle">Painel de Acompanhamento - dev Jeniffer</div>
+            <div className="login-subtitle">Painel de Acompanhamento</div>
           </div>
 
           <form className="login-form" onSubmit={entrar}>
@@ -292,7 +292,7 @@ export default function Login() {
             </button>
           </form>
 
-          <div className="login-footer">SCORPIONS © 2026</div>
+          <div className="login-footer">SCORPIONS © 2026 - Dev Jeniffer</div>
         </div>
       </div>
     </>
