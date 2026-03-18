@@ -101,7 +101,7 @@ export async function POST(req: NextRequest) {
 
       // Monta os dados
       const headers = [
-        "data", "nome", "veiculo", "compareceu", "tempoOnline",
+        "id", "data", "nome", "veiculo", "compareceu", "tempoOnline",
         "aceitas", "entregues", "canceladas",
         "recusadasTotal", "recusadasManual", "recusadasAuto",
         "taxaPontualidade", "tempoMedioEntrega", "acima55min",
