@@ -136,6 +136,7 @@ export function AbaPerformance() {
 
   // Filtros
   const [filtroNome, setFiltroNome] = useState("")
+  const [filtroId, setFiltroId] = useState("")
   const [filtroData, setFiltroData] = useState("")
   const [filtroTurno, setFiltroTurno] = useState("")
   const [filtroVeiculo, setFiltroVeiculo] = useState("")
@@ -338,8 +339,10 @@ export function AbaPerformance() {
       if (!map[chave]) map[chave] = []
       map[chave].push(d)
     })
-    return Object.entries(map).map(([nome, dias]) => ({
-      nome, veiculo: dias[0]?.veiculo ?? "",
+    return Object.entries(map).map(([chave, dias]) => ({
+      id: dias[0]?.id ?? chave,
+      nome: dias[0]?.nome ?? chave,
+      veiculo: dias[0]?.veiculo ?? "",
       diasTrabalhados: dias.filter(d => d.tempoOnline > 0 || d.aceitas > 0).length,
       tempoOnline: avg(dias.filter(d => d.tempoOnline > 0).map(d => d.tempoOnline)),
       aceitas: dias.reduce((a, d) => a + d.aceitas, 0),
@@ -355,7 +358,11 @@ export function AbaPerformance() {
   }, [dadosFiltrados])
 
   const listaFiltrada = useMemo(() => {
-    let lista = porEntregador.filter(e => !filtroNome || e.nome.toLowerCase().includes(filtroNome.toLowerCase()))
+    let lista = porEntregador.filter(e => {
+      if (filtroNome && !e.nome.toLowerCase().includes(filtroNome.toLowerCase())) return false
+      if (filtroId && !e.id.includes(filtroId)) return false
+      return true
+    })
     return lista.sort((a, b) => {
       const va = (a as any)[sortKey] ?? 0; const vb = (b as any)[sortKey] ?? 0
       return sortDir === "desc" ? vb - va : va - vb
@@ -431,8 +438,8 @@ export function AbaPerformance() {
     if (sortKey !== k) return <Minus size={11} color="#444" />
     return sortDir === "desc" ? <ChevronDown size={11} color="#FFD84D" /> : <ChevronUp size={11} color="#FFD84D" />
   }
-  function limparFiltros() { setFiltroNome(""); setFiltroData(""); setFiltroTurno(""); setFiltroVeiculo(""); setFiltroCompareceu("") }
-  const temFiltroAtivo = !!(filtroData || filtroTurno || filtroVeiculo || filtroCompareceu || filtroNome)
+  function limparFiltros() { setFiltroNome(""); setFiltroId(""); setFiltroData(""); setFiltroTurno(""); setFiltroVeiculo(""); setFiltroCompareceu("") }
+  const temFiltroAtivo = !!(filtroData || filtroTurno || filtroVeiculo || filtroCompareceu || filtroNome || filtroId)
 
   // ─── TELA DE UPLOAD ───────────────────────────────────────────────────────
 
@@ -589,13 +596,22 @@ export function AbaPerformance() {
               </select>
             </div>
           ))}
-          <div style={{ gridColumn: "span 2" }}>
+          <div>
             <div style={{ fontSize: 10, color: "#555", textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 }}>Entregador</div>
             <div style={{ display: "flex", alignItems: "center", gap: 8, background: "#161616", border: `1px solid ${filtroNome ? "rgba(255,255,255,0.2)" : "rgba(255,255,255,0.08)"}`, borderRadius: 8, padding: "0 10px" }}>
               <Search size={13} color="#555" />
               <input value={filtroNome} onChange={e => setFiltroNome(e.target.value)} placeholder="Nome..."
                 style={{ flex: 1, background: "transparent", border: "none", color: "#fff", fontFamily: "DM Sans", fontSize: 12, padding: "7px 0", outline: "none" }} />
               {filtroNome && <button onClick={() => setFiltroNome("")} style={{ background: "none", border: "none", color: "#555", cursor: "pointer", display: "flex" }}><X size={12} /></button>}
+            </div>
+          </div>
+          <div>
+            <div style={{ fontSize: 10, color: "#555", textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 }}>ID</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, background: "#161616", border: `1px solid ${filtroId ? "rgba(255,216,77,0.4)" : "rgba(255,255,255,0.08)"}`, borderRadius: 8, padding: "0 10px" }}>
+              <Search size={13} color="#555" />
+              <input value={filtroId} onChange={e => setFiltroId(e.target.value)} placeholder="ID do entregador..."
+                style={{ flex: 1, background: "transparent", border: "none", color: filtroId ? "#FFD84D" : "#fff", fontFamily: "DM Sans", fontSize: 12, padding: "7px 0", outline: "none" }} />
+              {filtroId && <button onClick={() => setFiltroId("")} style={{ background: "none", border: "none", color: "#555", cursor: "pointer", display: "flex" }}><X size={12} /></button>}
             </div>
           </div>
         </div>
@@ -778,10 +794,13 @@ export function AbaPerformance() {
                   <tr key={i} style={{ borderBottom: "1px solid rgba(255,255,255,0.04)" }}
                     onMouseEnter={ev => (ev.currentTarget.style.background = "rgba(255,255,255,0.02)")}
                     onMouseLeave={ev => (ev.currentTarget.style.background = "transparent")}>
-                    <td style={{ padding: "9px 13px", fontSize: 13, color: "#e8e8f0", fontWeight: 600, whiteSpace: "nowrap" }}>
+                    <td style={{ padding: "9px 13px", whiteSpace: "nowrap" }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                         <div style={{ width: 24, height: 24, borderRadius: "50%", background: "rgba(156,39,176,0.2)", border: "1px solid rgba(156,39,176,0.3)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, color: "#ce93d8", fontWeight: 700, flexShrink: 0 }}>{e.nome.charAt(0)}</div>
-                        {e.nome}
+                        <div>
+                          <div style={{ fontSize: 13, color: "#e8e8f0", fontWeight: 600 }}>{e.nome}</div>
+                          <div style={{ fontSize: 9, color: "#444", marginTop: 1 }}>{e.id}</div>
+                        </div>
                       </div>
                     </td>
                     <td style={{ padding: "9px 13px" }}>
