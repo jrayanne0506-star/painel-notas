@@ -214,16 +214,16 @@ export function AbaPerformance() {
         const reconstruido: EntregadorDia[] = json.dados.map((d: any) => ({
           ...d,
           id: String(d.id ?? d.nome ?? ""),
-          tempoOnline: Number(d.tempoOnline) || 0,
+          tempoOnline: parseFloat(d.tempoOnline) || 0,
           aceitas: Number(d.aceitas) || 0,
           entregues: Number(d.entregues) || 0,
           canceladas: Number(d.canceladas) || 0,
           recusadasTotal: Number(d.recusadasTotal) || 0,
           recusadasManual: Number(d.recusadasManual) || 0,
           recusadasAuto: Number(d.recusadasAuto) || 0,
-          taxaPontualidade: Number(d.taxaPontualidade) || 0,
-          tempoMedioEntrega: Number(d.tempoMedioEntrega) || 0,
-          acima55min: Number(d.acima55min) || 0,
+          taxaPontualidade: parseFloat(d.taxaPontualidade) || 0,
+          tempoMedioEntrega: parseFloat(d.tempoMedioEntrega) || 0,
+          acima55min: parseFloat(d.acima55min) || 0,
           emAtraso: Number(d.emAtraso) || 0,
           muitoAtrasado: Number(d.muitoAtrasado) || 0,
           turnos: [],
@@ -334,8 +334,9 @@ export function AbaPerformance() {
   const porEntregador = useMemo(() => {
     const map: Record<string, EntregadorDia[]> = {}
     // Agrupa por id para evitar conflito com nomes iguais
+    // Se não tiver id (semanas antigas), usa nome como chave
     dadosFiltrados.forEach(d => {
-      const chave = d.id || d.nome
+      const chave = (d.id && d.id.length > 5) ? d.id : d.nome
       if (!map[chave]) map[chave] = []
       map[chave].push(d)
     })
@@ -367,7 +368,7 @@ export function AbaPerformance() {
       const va = (a as any)[sortKey] ?? 0; const vb = (b as any)[sortKey] ?? 0
       return sortDir === "desc" ? vb - va : va - vb
     })
-  }, [porEntregador, filtroNome, sortKey, sortDir])
+  }, [porEntregador, filtroNome, filtroId, sortKey, sortDir])
 
   const kpis = useMemo(() => {
     const entregues = dadosFiltrados.reduce((a, d) => a + d.entregues, 0)
@@ -789,7 +790,8 @@ export function AbaPerformance() {
                 const pontColor = e.taxaPontualidade >= 0.9 ? "#4ade80" : e.taxaPontualidade >= 0.7 ? "#fbbf24" : "#f87171"
                 const entregaColor = txEntrega >= 0.9 ? "#4ade80" : txEntrega >= 0.7 ? "#fbbf24" : "#f87171"
                 const totalRec = e.recusadasManual + e.recusadasAuto
-                const turnosUnicos = Array.from(new Set(dadosFiltrados.filter(d => d.nome === e.nome).flatMap(d => d.turnosOn)))
+                const chaveEntregador = (e.id && e.id.length > 5) ? e.id : e.nome
+                const turnosUnicos = Array.from(new Set(dadosFiltrados.filter(d => ((d.id && d.id.length > 5) ? d.id : d.nome) === chaveEntregador).flatMap(d => d.turnosOn)))
                 return (
                   <tr key={i} style={{ borderBottom: "1px solid rgba(255,255,255,0.04)" }}
                     onMouseEnter={ev => (ev.currentTarget.style.background = "rgba(255,255,255,0.02)")}
