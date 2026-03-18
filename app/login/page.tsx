@@ -247,7 +247,7 @@ export default function Login() {
           <div className="login-brand">
             <span className="login-scorpion">🦂</span>
             <div className="login-title">Scorpions Delivery</div>
-            <div className="login-subtitle">Painel de Notas Fiscais</div>
+            <div className="login-subtitle">Painel de Acompanhamento - dev Jeniffer</div>
           </div>
 
           <form className="login-form" onSubmit={entrar}>

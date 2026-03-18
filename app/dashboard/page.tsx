@@ -782,7 +782,7 @@ export default function Painel() {
             <div className="header-logo">🦂</div>
             <div>
               <div className="header-title">Scorpions Delivery</div>
-              <div className="header-subtitle">Painel Financeiro</div>
+              <div className="header-subtitle">Painel de Acompanhamento</div>
             </div>
           </div>
           <div className="header-actions">
